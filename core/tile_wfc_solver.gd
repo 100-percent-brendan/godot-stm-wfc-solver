@@ -37,6 +37,26 @@ func _print_debug_message(message: String, severity : DebugSeverity) -> void:
 			_:
 				print(message)
 
+## Get all valid possible tiles from the terrain tile set.
+##
+## Returns an array containing the source ID and tile index as a [Vector2i].
+func _get_valid_tiles() -> Array[Vector2i]:
+	# TODO: Add check for get_terrain_set_counts.
+	if !_terrain_tile_set:
+		return []
+	
+	var _valid_tiles : Array[Vector2i] = []
+	for i in range(_terrain_tile_set.get_source_count()):
+		var source_id := _terrain_tile_set.get_source_id(i)
+		var source := _terrain_tile_set.get_source(source_id)
+		
+		if source is TileSetAtlasSource:
+			for j in range(source.get_tiles_count()):
+				# TODO: Add check here to see if tile is included by custom criteria
+				_valid_tiles.push_back(Vector2i(source_id, j))
+	
+	return _valid_tiles
+
 ## Configure if the solver will output debug messages and information.
 func set_debug_mode(debug_mode : bool) -> void:
 	_debug_mode = debug_mode
@@ -115,6 +135,7 @@ func run() -> TileWFCGrid:
 	prng.seed = _seed
 	
 	# TODO: Core logic here.
+	var valid_tiles := _get_valid_tiles()
 	
 	var end_time : int = Time.get_ticks_msec()
 	
