@@ -71,7 +71,7 @@ func set_solved() -> void:
 ##
 ## The space may then be updated.
 func get_space(x : int, y : int) -> TileWFCGridSpace:
-	if x >= _width || y >= _height:
+	if x >= _width || y >= _height || x < 0 || y < 0:
 		return null
 	
 	return _grid[x + y * _width]

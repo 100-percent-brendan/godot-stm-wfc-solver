@@ -17,10 +17,19 @@ var _status : Status = Status.OPEN ## If the space is populated or not.
 var _possibilities : Array[Vector2i] = [] ## A collection of possible tiles for this space.
 
 ## Set space to contain tile.
-func place_tile(source_id : int, tile_id : int) -> void:
-	_source_id = source_id
-	_tile_index = tile_id
+##
+## The [param tile] is a source ID and tile index.
+func place_tile(tile : Vector2i) -> void:
+	_source_id = tile[0]
+	_tile_index = tile[1]
 	_status = Status.CLOSED
+	clear_possibilities()
+
+## Get the tile.
+##
+## Be sure to check status to see if a tile exists here first.
+func get_tile() -> Vector2i:
+	return Vector2i(_source_id, _tile_index)
 
 ## Reset space to open.
 func open_space() -> void:
@@ -33,8 +42,10 @@ func get_status() -> Status:
 	return _status
 
 ## Add a possible tile this space could be occupied with.
-func add_possibility(source_id : int, tile_id : int):
-	_possibilities.push_back(Vector2i(source_id, tile_id))
+##
+## The [param tile] is a source ID and tile index.
+func add_possibility(tile : Vector2i):
+	_possibilities.push_back(Vector2i(tile))
 
 ## Clear the possible tiles that could go into this space.
 func clear_possibilities():

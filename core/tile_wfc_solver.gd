@@ -118,11 +118,11 @@ func _get_tile_set_cell_neighbors(
 			TileSet.CELL_NEIGHBOR_TOP_RIGHT_CORNER
 		]
 
-## Helper for getting the insection of two arrays.
+## Helper for getting the insection of two Vector2i arrays.
 ##
 ## Order is not guarenteed.
-func _get_array_intersection(a : Array, b : Array) -> Array:
-	var c : Array = []
+func _get_vector2i_array_intersection(a : Array[Vector2i], b : Array[Vector2i]) -> Array[Vector2i]:
+	var c : Array[Vector2i] = []
 	
 	if !a || !b:
 		return c
@@ -198,8 +198,8 @@ func _update_space_possibilities(terrain_tiles : Array[Vector2i], grid : TileWFC
 		grid.get_space(coords.x, coords.y - 1),
 		ComparisonDirection.BOTTOM_TO_TOP
 	])
-	neighbor_spaces.push_back(
-		[grid.get_space(coords.x + 1, coords.y),
+	neighbor_spaces.push_back([
+		grid.get_space(coords.x + 1, coords.y),
 		ComparisonDirection.LEFT_TO_RIGHT
 	])
 	neighbor_spaces.push_back([
@@ -211,7 +211,7 @@ func _update_space_possibilities(terrain_tiles : Array[Vector2i], grid : TileWFC
 		ComparisonDirection.RIGHT_TO_LEFT
 	])
 	
-	var combined_possibility_space : Array[Vector2i] = terrain_tiles.duplicate()
+	var combined_possibilities : Array[Vector2i] = terrain_tiles.duplicate()
 	var possibility_spaces : Array[Array] = []
 	
 	for neighbor_space in neighbor_spaces:
@@ -222,13 +222,65 @@ func _update_space_possibilities(terrain_tiles : Array[Vector2i], grid : TileWFC
 		if !neighbor || neighbor.get_status() == TileWFCGridSpace.Status.OPEN:
 			continue
 		
-		# TODO: Finish this: likely requires adding methods to spaces
-		#var current_space : Array[Vector2i]
-		#for tile in terrain_tiles:
-		#	if _compare_terrain_tiles(space., tile):
+		# TODO: Optimize: Move building this to a central step and tile-specific index
+		var possibilities : Array[Vector2i]
+		for tile in terrain_tiles:
+			if _compare_terrain_tiles(neighbor.get_tile(), tile, direction):
+				possibilities.push_back(tile)
+		possibility_spaces.push_back(possibilities)
 	
-	print(coords)
-	print(neighbor_spaces)
+	for possibilities in possibility_spaces:
+		combined_possibilities = _get_vector2i_array_intersection(combined_possibilities, possibilities)
+	
+	space.clear_possibilities()
+	for tile in combined_possibilities:
+		space.add_possibility(tile)
+
+## Place or remove a tile from a space.
+##
+## This updates the space possibilities of this tile and all surrounding tiles,
+## if relevant.
+## Requires a list of valid terrain tiles, the grid, the coordinates of
+## which space is being changed, and the tile its being changed to (or the remove flag).
+func _place_tile(
+	terrain_tiles : Array[Vector2i], grid : TileWFCGrid, coords : Vector2i,
+	tile : Vector2i, remove_tile : bool = false
+) -> void:
+	if !terrain_tiles || !grid:
+		return
+	
+	var space := grid.get_space(coords.x, coords.y)
+	if !space:
+		return
+	
+	if remove_tile:
+		space.open_space()
+		_update_space_possibilities(terrain_tiles, grid, coords)
+	else:
+		space.place_tile(tile)
+	
+	## Surrounding spaces are organized top, right, bottom, and then left.
+	var neighbor_coords : Array[Vector2i] = []
+	neighbor_coords.push_back(Vector2i(coords.x, coords.y - 1))
+	neighbor_coords.push_back(Vector2i(coords.x + 1, coords.y))
+	neighbor_coords.push_back(Vector2i(coords.x, coords.y + 1))
+	neighbor_coords.push_back(Vector2i(coords.x - 1, coords.y))
+	
+	## Update all the surrounding space possibilities
+	for neighbor in neighbor_coords:
+		## This will ignore null spaces
+		_update_space_possibilities(terrain_tiles, grid, neighbor)
+
+## Remove a tile from a space.
+##
+## This updates the space possibilities of this tile and all surrounding tiles,
+## if relevant.
+## Requires a list of valid terrain tiles, the grid, and the coordinates of
+## the space where the tile is being removed.
+func _remove_tile(
+	terrain_tiles : Array[Vector2i], grid : TileWFCGrid, coords : Vector2i
+) -> void:
+	_place_tile(terrain_tiles, grid, coords, Vector2i(), true)
 
 ## Initialize grid.
 ##
@@ -329,16 +381,18 @@ func run() -> TileWFCGrid:
 	var terrain_tiles := _get_valid_terrain_tiles()
 	_init_grid(terrain_tiles, grid)
 	
-	# TODO: Remove this test
-	for i in terrain_tiles:
-		var found = 0
-		for j in terrain_tiles:
-			if _compare_terrain_tiles(i, j, ComparisonDirection.BOTTOM_TO_TOP):
-				if i.x == 0 && i.y == 2:
-					print(_terrain_tile_set.get_source(j.x).get_tile_id(j.y))
-				found += 1
-		print("Matches found for ", i, ": ", found)
-	print(_terrain_tile_set.get_source(0).get_tile_id(2))
+	_place_tile(terrain_tiles, grid, Vector2i(3, 3), Vector2i(1, 15))
+	_remove_tile(terrain_tiles, grid, Vector2i(3, 3))
+	_place_tile(terrain_tiles, grid, Vector2i(3, 3), Vector2i(1, 15))
+	## TODO: Remove this test
+	var dimensions := grid.get_dimensions()
+	for y in dimensions.y:
+		var line = ""
+		for x in dimensions.x:
+			#if grid.get_space(x, y)._possibilities.size() < 99:
+			#	print(grid.get_space(x, y)._possibilities)
+			line += ("[%-2d]" % grid.get_space(x, y).get_entropy())
+		print(line)
 	
 	var end_time : int = Time.get_ticks_msec()
 	
