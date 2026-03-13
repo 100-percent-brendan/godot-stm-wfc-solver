@@ -237,7 +237,7 @@ func _update_space_possibilities(terrain_tiles : Array[Vector2i], grid : TileWFC
 		# TODO: Optimize: Move building this to a central step and tile-specific index
 		var possibilities : Array[Vector2i]
 		for tile in terrain_tiles:
-			if _compare_terrain_tiles(neighbor.get_tile(), tile, direction):
+			if _compare_terrain_tiles(tile, neighbor.get_tile(), direction):
 				possibilities.push_back(tile)
 		possibility_spaces.push_back(possibilities)
 	
