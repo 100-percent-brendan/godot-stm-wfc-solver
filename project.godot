@@ -14,3 +14,8 @@ config/name="Tile Wave Function Collapse Solver"
 run/main_scene="uid://1joa7cbh0a0"
 config/features=PackedStringArray("4.5", "Forward Plus")
 config/icon="res://icon.svg"
+
+[display]
+
+window/stretch/mode="canvas_items"
+window/stretch/scale=4.0

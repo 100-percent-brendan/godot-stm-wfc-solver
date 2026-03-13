@@ -1,6 +1,9 @@
 class_name TileWFCSolver extends Node
 ## Tile-based wave function collapse (WFC) solver.
 ##
+## This supports square tiles with edge and corner terrain matching.
+## This does not suppose alternate tiles.
+##
 ## When provided with tilesets and a set of parameters, the solver will attempt
 ## to create a scene that matches applicable constraints using WFC.
 ##
@@ -8,9 +11,15 @@ class_name TileWFCSolver extends Node
 ## Running in multiple loocations may result in corruption.
 ## Further, running the same instance in multiple threads is considered unsafe.
 # TODO: Review this description, and provide usage instructions.
-# TODO: Add deferred signal for debug updates.
 
-const MIN_SIZE : int = 6 ## The minimum size of the scene grid in each dimension.
+## A debugging-only signal for when a tile is placed.
+signal tile_placed(coords : Vector2i, source_id : int, atlas_coords : Vector2i)
+
+## A debugging-only signal for when a tile is removed.
+signal tile_removed(coords : Vector2i)
+
+## A debugging-only signal for when the grid is reset. 
+signal grid_reset()
 
 ## The debug message severity. 
 enum DebugSeverity {
@@ -27,8 +36,11 @@ enum ComparisonDirection {
 	BOTTOM_TO_TOP ## A bottom-to-top tile comparison.
 }
 
+const MIN_SIZE : int = 6 ## The minimum size of the scene grid in each dimension.
+
 # TODO: Consider adding backtracks
 var _debug_mode : bool = false ## Output debug messages and information.
+var _debug_delay : float = 0.0 ## Delay between tile placements and other major actions.
 var _seed : int = 0 ## The seed used in the pseudorandom number generator (PRNG).
 var _dimensions : Vector2i = Vector2i(MIN_SIZE, MIN_SIZE) ## The dimensions of the scene grid.
 var _max_retries : int = 100 ## The maximum number of retry attempts.
@@ -71,7 +83,7 @@ func _get_valid_terrain_tiles() -> Array[Vector2i]:
 func _get_tile_data(tile : Vector2i) -> TileData:
 	var source := _terrain_tile_set.get_source(tile.x)
 	if source is TileSetAtlasSource:
-		# TODO: Investigate second parameter: alternate tile
+		## Alterrnative tiles are not supported, so the second parameter is 0
 		var tile_data : TileData = source.get_tile_data(source.get_tile_id(tile.y), 0)
 		return tile_data
 	
@@ -256,8 +268,14 @@ func _place_tile(
 	if remove_tile:
 		space.open_space()
 		_update_space_possibilities(terrain_tiles, grid, coords)
+		if _debug_mode:
+			tile_removed.emit(coords)
 	else:
 		space.place_tile(tile)
+		if _debug_mode:
+			var source := _terrain_tile_set.get_source(tile.x)
+			if source is TileSetAtlasSource:
+				tile_placed.emit(coords, tile.x, source.get_tile_id(tile.y))
 	
 	## Surrounding spaces are organized top, right, bottom, and then left.
 	var neighbor_coords : Array[Vector2i] = []
@@ -270,6 +288,51 @@ func _place_tile(
 	for neighbor in neighbor_coords:
 		## This will ignore null spaces
 		_update_space_possibilities(terrain_tiles, grid, neighbor)
+
+## Place a random tile in a space.
+##
+## This updates the space possibilities of this tile and all surrounding tiles,
+## if relevant.
+## Requires a list of valid terrain tiles, the pseudorandom number generator,
+## the grid, and the coordinates of which space is being changed.
+##
+## If was able to roll to place a tile, will return true, otherwise false.
+func _place_random_tile(
+	terrain_tiles : Array[Vector2i], prng : RandomNumberGenerator, grid : TileWFCGrid, coords : Vector2i
+) -> bool:
+	# TODO: Upgrade this to take into account tile probabilities
+	
+	if terrain_tiles.size() < 1:
+		return false
+	
+	var space : TileWFCGridSpace = grid.get_space(coords.x, coords.y)
+	if !space:
+		return false
+	
+	var possibilities := space.get_possibilities()
+	
+	if possibilities.size() < 1:
+		return false
+	
+	var probabilities : Array = []
+	var total_weight : float = 0.0
+	for tile in possibilities:
+		var weight = 1.0 # TODO: Replace me
+		total_weight += weight
+		probabilities.push_back([weight, tile])
+	
+	if total_weight <= 0.0:
+		return false
+	
+	var roll := prng.randf() * total_weight
+	for prospect in probabilities:
+		if roll <= prospect[0]:
+			_place_tile(terrain_tiles, grid, coords, prospect[1])
+			return true
+		
+		roll -= prospect[0]
+	
+	return false
 
 ## Remove a tile from a space.
 ##
@@ -300,9 +363,34 @@ func _init_grid(terrain_tiles : Array[Vector2i], grid : TileWFCGrid) -> void:
 		for x in range(dimensions.x):
 			_update_space_possibilities(terrain_tiles, grid, Vector2i(x, y))
 
+## Sort spaces left.
+##
+## This is a helper function that sorts the spaces left array first by entropy left
+## (to choose the lowest entropy space) and then by distance from the center.
+##
+## The general idea is that by starting in the center, and working on the
+## lowest entropy spaces, the algorithm can: stop as soon as it detects an
+## unsolvable state and avoid solving edge pieces first, which are more likely to
+## have more options near the end.
+##
+## This expects an Array[Array] which each array contains a Vector2i (space
+## coordinates) and a [TileWFCSpace].
+func _sort_spaces_left(spaces_left : Array) -> void:
+	spaces_left.sort_custom(_compare_spaces_left)
+
+## Compare spaces for the custom sort in [code]_sort_spaces_left()[/code].
+func _compare_spaces_left(a, b):
+	if a[1].get_entropy() == b[1].get_entropy():
+		return a[0].distance_to(_dimensions/2.0) < b[0].distance_to(_dimensions/2.0)
+	return a[1].get_entropy() < b[1].get_entropy()
+
 ## Configure if the solver will output debug messages and information.
 func set_debug_mode(debug_mode : bool) -> void:
 	_debug_mode = debug_mode
+
+## Set the amount of time between major actions, such as tile placements, when debugging.
+func set_debug_delay(delay : float) -> void:
+	_debug_delay = max(delay, 0.0)
 
 ## Set the seed for the pseudorandom number generator (PRNG).
 func set_seed(prng_seed : int) -> void:
@@ -357,33 +445,60 @@ func can_run() -> bool:
 ## Returns the [TileWFCGrid] with or without a solution. Always check the grid
 ## status to ensure there were no errors.
 func run() -> TileWFCGrid:
-	var grid := TileWFCGrid.new(_dimensions.x, _dimensions.y)
-	
 	if !can_run():
 		_print_debug_message(
 			"The solver could not start due to a failed pre-check.",
 			DebugSeverity.ERROR
 		)
-		grid.set_failed(TileWFCGrid.FailureCause.ERROR)
-		return grid
+		var error_grid := TileWFCGrid.new(0, 0)
+		error_grid.set_failed(TileWFCGrid.FailureCause.ERROR)
+		return error_grid
 	
 	_print_debug_message(
 		"The solver has started with seed " + str(_seed) + ".",
 		DebugSeverity.INFORMATION
 	)
 	
-	var start_time : int = Time.get_ticks_msec()
+	# TODO: Place restart retry here
+	var start_time : int = Time.get_ticks_msec() ## When the process started
+	var retry : int = 0 ## The current retry
+	var has_no_solution : bool = false ## If the current solution state is unsolvable
 	
 	var prng := RandomNumberGenerator.new()
 	prng.seed = _seed
 	
 	# TODO: Core logic here.
 	var terrain_tiles := _get_valid_terrain_tiles()
+	var grid := TileWFCGrid.new(_dimensions.x, _dimensions.y)
 	_init_grid(terrain_tiles, grid)
 	
-	_place_tile(terrain_tiles, grid, Vector2i(3, 3), Vector2i(1, 15))
-	_remove_tile(terrain_tiles, grid, Vector2i(3, 3))
-	_place_tile(terrain_tiles, grid, Vector2i(3, 3), Vector2i(1, 15))
+	## Spaces, partnered with their coordinates
+	var spaces_left : Array = []
+	var grid_dims := grid.get_dimensions()
+	for y in grid_dims.y:
+		for x in grid_dims.x:
+			spaces_left.push_back([Vector2i(x, y), grid.get_space(x, y)])
+	
+	while spaces_left.size() > 0:
+		if _debug_mode && _debug_delay > 0.0:
+			await Engine.get_main_loop().create_timer(_debug_delay).timeout
+		_sort_spaces_left(spaces_left)
+		var current_space = spaces_left.pop_front()
+		if current_space[1].get_entropy() > 0:
+			_place_random_tile(terrain_tiles, prng, grid, current_space[0])
+		else:
+			# TODO: Add message and mechanism for retry
+			has_no_solution = true
+			break
+	
+	# TODO: REmove me
+	#_sort_spaces_left(spaces_left)
+	#for i in spaces_left:
+	#	print(i, i[1].get_entropy())
+	#print(spaces_left)
+	
+	
+	
 	## TODO: Remove this test
 	var dimensions := grid.get_dimensions()
 	for y in dimensions.y:
@@ -394,7 +509,7 @@ func run() -> TileWFCGrid:
 			line += ("[%-2d]" % grid.get_space(x, y).get_entropy())
 		print(line)
 	
-	var end_time : int = Time.get_ticks_msec()
+	var end_time : int = Time.get_ticks_msec() ## When the process ended
 	
 	# TODO: Did it give up or succeed?
 	_print_debug_message(

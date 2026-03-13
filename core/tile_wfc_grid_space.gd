@@ -56,3 +56,9 @@ func clear_possibilities():
 ## This represents the number of tiles that could occupy the space.
 func get_entropy() -> int:
 	return _possibilities.size()
+
+## Get the array of possibilities.
+##
+## This is a direct reference, do not modify it.
+func get_possibilities() -> Array[Vector2i]:
+	return _possibilities
