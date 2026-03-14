@@ -11,6 +11,7 @@ class_name TileWFCSolver extends Node
 ## Running in multiple loocations may result in corruption.
 ## Further, running the same instance in multiple threads is considered unsafe.
 # TODO: Review this description, and provide usage instructions.
+# TODO: Check all comments. Any documentation comments should have ##, but others should have #.
 
 ## A debugging-only signal for when a tile is placed.
 signal tile_placed(coords : Vector2i, source_id : int, atlas_coords : Vector2i)
@@ -158,29 +159,97 @@ func _get_tile_set_cell_neighbors(
 ## Whether this tile has contiguous terrain on all edges.
 ##
 ## If the same terrain is on all edges it returns true, otherwise it returns false.
-func _has_uniform_tile_edge(tile : Vector2i) -> bool:
-	if !_terrain_tile_set:
-		return false
-	
+func _has_uniform_tile_edges(tile : Vector2i) -> bool:
+	# TODO: Precomputer this
 	var tile_data : TileData = _get_tile_data(tile)
 	if !tile_data:
 		return false
 	
 	var is_first : bool = true
-	var target_bit : TileSet.CellNeighbor
+	var target_terrain : int
 	for bit in VALID_TILE_SET_CELL_NEIGHBORS:
 		if !tile_data.is_valid_terrain_peering_bit(bit):
 			return false
 		
 		if is_first:
 			is_first = false
-			target_bit = tile_data.get_terrain_peering_bit(bit) as TileSet.CellNeighbor
-		elif tile_data.get_terrain_peering_bit(bit) == target_bit:
+			target_terrain = tile_data.get_terrain_peering_bit(bit)
+		elif tile_data.get_terrain_peering_bit(bit) == target_terrain:
 			continue
 		else:
 			return false
 	
 	return true
+
+## Whether this tile has an edge that is considered "flat".
+##
+## This checks to see if one edge of a tile is a single terrain, and all the
+## other edges are another.
+func _has_flat_tile_edge(tile : Vector2i) -> bool:
+	# TODO: Precomputer this
+	
+	var tile_data : TileData = _get_tile_data(tile)
+	if !tile_data:
+		return false
+	
+	var found_match : bool = false
+	for edge_neighbors : Array[TileSet.CellNeighbor] in [
+		TILE_SET_TOP_CELL_NEIGHBORS, TILE_SET_RIGHT_CELL_NEIGHBORS,
+		TILE_SET_BOTTOM_CELL_NEIGHBORS, TILE_SET_LEFT_CELL_NEIGHBORS
+	]:
+		var is_first : bool = true
+		var target_terrain : int
+		var match_count : int = 0
+		for bit in edge_neighbors:
+			if !tile_data.is_valid_terrain_peering_bit(bit):
+				return false
+			
+			if is_first:
+				is_first = false
+				target_terrain = tile_data.get_terrain_peering_bit(bit)
+				match_count += 1
+				continue
+			elif tile_data.get_terrain_peering_bit(bit) == target_terrain:
+				match_count += 1
+				continue
+			else:
+				break
+			
+		if match_count == 3:
+			found_match = true
+			break
+	
+	# No edges are uniform terrain
+	if !found_match:
+		return false
+	
+	# The following simplifies seeing if the terrain within the tile matches
+	# the function's criteria for being flat.
+	# If there are more or less than two terrains, halt. If there is one terrain
+	# with three references, it matches the criteria of being "flat", by process
+	# of elimination. Otherwise, halt.
+	#
+	# This is possible because a matching edge has already been discovered above.
+	# TODO: Update comments to reference peering bits, instead of neighbors.
+	var terrain_counts : Dictionary[int, int]
+	for bit in VALID_TILE_SET_CELL_NEIGHBORS:
+		if !tile_data.is_valid_terrain_peering_bit(bit):
+			return false
+		
+		var terrain : int = tile_data.get_terrain_peering_bit(bit)
+		if terrain_counts.has(terrain):
+			terrain_counts[terrain] += 1
+		else:
+			terrain_counts[terrain] = 1
+	
+	if terrain_counts.size() > 2 || terrain_counts.size() < 2:
+		return false
+	
+	for terrain in terrain_counts:
+		if terrain_counts[terrain] == 3:
+			return true
+	
+	return false
 
 ## Helper for getting the insection of two Vector2i arrays.
 ##
@@ -366,7 +435,9 @@ func _place_random_tile(
 	if possibilities.size() < 1:
 		return false
 	
-	var probabilities : Array[Array] = [] ## Each probability prospect has a weight, a tile, and a marker as to if the edge is uniform.
+	## Each probability prospect has a weight, a tile, if the edge is uniform,
+	## and if the tile is "flat".
+	var probabilities : Array[Array] = []
 	var solid_edge_weight : float = 0.0 ## Weight of tiles with solid terrain edges.
 	var varied_edge_weight : float = 0.0 ## Weight of tiles with varied terrain edges.
 	var solid_edge_count : int = 0 ## The number of tiles with solid terrain edges.
@@ -382,7 +453,8 @@ func _place_random_tile(
 		else:
 			continue
 		
-		var has_uniform_edge := _has_uniform_tile_edge(tile)
+		var has_uniform_edge := _has_uniform_tile_edges(tile)
+		var has_flat_edge = _has_flat_tile_edge(tile)
 		if has_uniform_edge:
 			solid_edge_count += 1
 			solid_edge_weight += weight
@@ -390,7 +462,7 @@ func _place_random_tile(
 			varied_edge_count += 1
 			varied_edge_weight += weight
 			
-		probabilities.push_back([weight, tile, has_uniform_edge])
+		probabilities.push_back([weight, tile, has_uniform_edge, has_flat_edge])
 	
 	## Re-weight probabilities so that edge pieces have a weight total of 0.05
 	## and non-edge tiles have a total of 0.95, but respect their original weight
