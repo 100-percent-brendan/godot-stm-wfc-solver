@@ -36,6 +36,18 @@ enum ComparisonDirection {
 	BOTTOM_TO_TOP ## A bottom-to-top tile comparison.
 }
 
+## All valid tile set cell neighbors neighbors.
+const valid_tile_set_cell_neighbors : Array[TileSet.CellNeighbor] = [
+	TileSet.CELL_NEIGHBOR_BOTTOM_LEFT_CORNER,
+	TileSet.CELL_NEIGHBOR_LEFT_SIDE,
+	TileSet.CELL_NEIGHBOR_TOP_LEFT_CORNER,
+	TileSet.CELL_NEIGHBOR_TOP_SIDE,
+	TileSet.CELL_NEIGHBOR_TOP_RIGHT_CORNER,
+	TileSet.CELL_NEIGHBOR_RIGHT_SIDE,
+	TileSet.CELL_NEIGHBOR_BOTTOM_RIGHT_CORNER,
+	TileSet.CELL_NEIGHBOR_BOTTOM_SIDE
+]
+
 const MIN_SIZE : int = 6 ## The minimum size of the scene grid in each dimension.
 
 # TODO: Consider adding backtracks
@@ -129,6 +141,33 @@ func _get_tile_set_cell_neighbors(
 			TileSet.CELL_NEIGHBOR_TOP_SIDE,
 			TileSet.CELL_NEIGHBOR_TOP_RIGHT_CORNER
 		]
+
+## Whether this tile has contiguous terrain on all edges.
+##
+## If the same terrain is on all edges it returns true, otherwise it returns false.
+func _has_uniform_tile_edge(tile : Vector2i) -> bool:
+	if !_terrain_tile_set:
+		return false
+	
+	var tile_data : TileData = _get_tile_data(tile)
+	if !tile_data:
+		return false
+	
+	var is_first : bool = true
+	var target_bit : TileSet.CellNeighbor
+	for bit in valid_tile_set_cell_neighbors:
+		if !tile_data.is_valid_terrain_peering_bit(bit):
+			return false
+		
+		if is_first:
+			is_first = false
+			target_bit = tile_data.get_terrain_peering_bit(bit)
+		elif tile_data.get_terrain_peering_bit(bit) == target_bit:
+			continue
+		else:
+			return false
+	
+	return true
 
 ## Helper for getting the insection of two Vector2i arrays.
 ##
@@ -314,12 +353,41 @@ func _place_random_tile(
 	if possibilities.size() < 1:
 		return false
 	
-	var probabilities : Array = []
+	var probabilities : Array[Array] = [] ## Each probability prospect has a weight, a tile, and a marker as to if the edge is uniform.
+	var solid_edge_weight : float = 0.0 ## Weight of tiles with solid terrain edges.
+	var varied_edge_weight : float = 0.0 ## Weight of tiles with varied terrain edges.
+	var solid_edge_count : int = 0 ## The number of tiles with solid terrain edges.
+	var varied_edge_count : int = 0 ## The number of tiles with varied terrain edges.
 	var total_weight : float = 0.0
 	for tile in possibilities:
-		var weight = 1.0 # TODO: Replace me
-		total_weight += weight
-		probabilities.push_back([weight, tile])
+		var weight := 1.0 # TODO: Replace me
+		var has_uniform_edge := _has_uniform_tile_edge(tile)
+		if has_uniform_edge:
+			solid_edge_count += 1
+			solid_edge_weight += weight
+		else:
+			varied_edge_count += 1
+			varied_edge_weight += weight
+			
+		probabilities.push_back([weight, tile, has_uniform_edge])
+	
+	## Re-weight probabilities so that edge pieces have a weight total of 0.05
+	## and non-edge tiles have a total of 0.95, but respect their original weight
+	## within a category.
+	var adjusted_probabilities : Array[Array] = []
+	for prospect in probabilities:
+		if prospect[2]:
+			if solid_edge_weight <= 0.0:
+				continue
+			var weight = (prospect[0] / solid_edge_count / solid_edge_count) * 0.95
+			prospect[0] = weight
+			total_weight += weight
+		else:
+			if varied_edge_weight <= 0.0:
+				continue
+			var weight = (prospect[0] / varied_edge_weight / varied_edge_count) * 0.05
+			prospect[0] = weight
+			total_weight += weight
 	
 	if total_weight <= 0.0:
 		return false
@@ -492,6 +560,8 @@ func run() -> TileWFCGrid:
 				break
 		
 		if has_no_solution && retry < _max_retries:
+			if _debug_mode && _debug_delay > 0.0:
+				await Engine.get_main_loop().create_timer(_debug_delay).timeout
 			retry += 1
 			_print_debug_message(
 				"No solution found. Restarting on retry " + str(retry) + ".",
