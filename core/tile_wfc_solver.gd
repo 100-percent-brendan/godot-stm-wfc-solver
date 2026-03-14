@@ -439,7 +439,6 @@ func _place_random_tile(
 	## and if the tile is "flat".
 	var probabilities : Array[Array] = []
 	var solid_edge_weight : float = 0.0 ## Weight of tiles with solid terrain edges.
-	var varied_edge_weight : float = 0.0 ## Weight of tiles with varied terrain edges.
 	var varied_flat_weight : float = 0.0 ## Weight of tiles with varied but flat edges.
 	var varied_nonflat_weight : float = 0.0 ## Weight of tiles with varied but non-flat edges.
 	var total_weight : float = 0.0
@@ -458,8 +457,6 @@ func _place_random_tile(
 		if has_uniform_edge:
 			solid_edge_weight += weight
 		else:
-			varied_edge_weight += weight
-			
 			if has_flat_edge:
 				varied_flat_weight += weight
 			else:
@@ -470,25 +467,27 @@ func _place_random_tile(
 	## Re-weight probabilities so that edge pieces have a weight total of 0.05
 	## and non-edge tiles have a total of 0.95, but respect their original weight
 	## within a category.
+	const SOLID_PROBABILITY := 0.95
+	const VARIED_PROBABILITY := 0.05
+	const NON_FLAT_PROBABILITY := 0.7
+	const FLAT_PROBABILITY := 0.3
 	for prospect in probabilities:
 		if prospect[2]: # If the prospect has a uniform edge
 			if solid_edge_weight <= 0.0:
 				continue
-			var weight = (prospect[0] / solid_edge_weight) * 0.95
+			var weight = (prospect[0] / solid_edge_weight) * SOLID_PROBABILITY
 			prospect[0] = weight
 			total_weight += weight
 		else: # If the prospect has a varied edge
-			if varied_edge_weight <= 0.0:
-				continue
 			var weight = 0.0
 			if prospect[3]: # If the prospect is considered flat
 				if varied_flat_weight <= 0.0:
 					continue
-				weight = (prospect[0] / varied_flat_weight) * 0.05 * 0.6
+				weight = (prospect[0] / varied_flat_weight) * VARIED_PROBABILITY * FLAT_PROBABILITY
 			else: # If the prospect is considered non-flat
 				if varied_nonflat_weight <= 0.0:
 					continue
-				weight = (prospect[0] / varied_nonflat_weight) * 0.05 * 0.4
+				weight = (prospect[0] / varied_nonflat_weight) * VARIED_PROBABILITY * NON_FLAT_PROBABILITY
 				
 			prospect[0] = weight
 			total_weight += weight
