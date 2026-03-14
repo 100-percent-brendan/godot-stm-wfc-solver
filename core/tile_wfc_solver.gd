@@ -36,8 +36,8 @@ enum ComparisonDirection {
 	BOTTOM_TO_TOP ## A bottom-to-top tile comparison.
 }
 
-## All valid tile set cell neighbors neighbors.
-const valid_tile_set_cell_neighbors : Array[TileSet.CellNeighbor] = [
+## All valid tile set cell neighbors.
+const VALID_TILE_SET_CELL_NEIGHBORS : Array[TileSet.CellNeighbor] = [
 	TileSet.CELL_NEIGHBOR_BOTTOM_LEFT_CORNER,
 	TileSet.CELL_NEIGHBOR_LEFT_SIDE,
 	TileSet.CELL_NEIGHBOR_TOP_LEFT_CORNER,
@@ -47,6 +47,35 @@ const valid_tile_set_cell_neighbors : Array[TileSet.CellNeighbor] = [
 	TileSet.CELL_NEIGHBOR_BOTTOM_RIGHT_CORNER,
 	TileSet.CELL_NEIGHBOR_BOTTOM_SIDE
 ]
+
+## Tile set cell neighbors for the top edge.
+const TILE_SET_TOP_CELL_NEIGHBORS : Array[TileSet.CellNeighbor] = [
+	TileSet.CELL_NEIGHBOR_TOP_LEFT_CORNER,
+	TileSet.CELL_NEIGHBOR_TOP_SIDE,
+	TileSet.CELL_NEIGHBOR_TOP_RIGHT_CORNER
+]
+
+## Tile set cell neighbors for the right edge.
+const TILE_SET_RIGHT_CELL_NEIGHBORS : Array[TileSet.CellNeighbor] = [
+	TileSet.CELL_NEIGHBOR_TOP_RIGHT_CORNER,
+	TileSet.CELL_NEIGHBOR_RIGHT_SIDE,
+	TileSet.CELL_NEIGHBOR_BOTTOM_RIGHT_CORNER
+]
+
+## Tile set cell neighbors for the bottom edge.
+const TILE_SET_BOTTOM_CELL_NEIGHBORS : Array[TileSet.CellNeighbor] = [
+	TileSet.CELL_NEIGHBOR_BOTTOM_LEFT_CORNER,
+	TileSet.CELL_NEIGHBOR_BOTTOM_SIDE,
+	TileSet.CELL_NEIGHBOR_BOTTOM_RIGHT_CORNER
+]
+
+## Tile set cell neighbors for the left edge.
+const TILE_SET_LEFT_CELL_NEIGHBORS : Array[TileSet.CellNeighbor] = [
+	TileSet.CELL_NEIGHBOR_TOP_LEFT_CORNER,
+	TileSet.CELL_NEIGHBOR_LEFT_SIDE,
+	TileSet.CELL_NEIGHBOR_BOTTOM_LEFT_CORNER
+]
+
 
 const MIN_SIZE : int = 6 ## The minimum size of the scene grid in each dimension.
 
@@ -112,35 +141,19 @@ func _get_tile_set_cell_neighbors(
 		(direction == ComparisonDirection.LEFT_TO_RIGHT && is_a) ||\
 		(direction == ComparisonDirection.RIGHT_TO_LEFT && !is_a)
 	):
-		return [
-			TileSet.CELL_NEIGHBOR_TOP_RIGHT_CORNER,
-			TileSet.CELL_NEIGHBOR_RIGHT_SIDE,
-			TileSet.CELL_NEIGHBOR_BOTTOM_RIGHT_CORNER
-		]
+		return TILE_SET_RIGHT_CELL_NEIGHBORS
 	elif (
 		(direction == ComparisonDirection.RIGHT_TO_LEFT && is_a) ||\
 		(direction == ComparisonDirection.LEFT_TO_RIGHT && !is_a)
 	):
-		return [
-			TileSet.CELL_NEIGHBOR_TOP_LEFT_CORNER,
-			TileSet.CELL_NEIGHBOR_LEFT_SIDE,
-			TileSet.CELL_NEIGHBOR_BOTTOM_LEFT_CORNER
-		]
+		return TILE_SET_LEFT_CELL_NEIGHBORS
 	elif (
 		(direction == ComparisonDirection.TOP_TO_BOTTOM && is_a) ||\
 		(direction == ComparisonDirection.BOTTOM_TO_TOP && !is_a)
 	):
-		return [
-			TileSet.CELL_NEIGHBOR_BOTTOM_LEFT_CORNER,
-			TileSet.CELL_NEIGHBOR_BOTTOM_SIDE,
-			TileSet.CELL_NEIGHBOR_BOTTOM_RIGHT_CORNER
-		]
+		return TILE_SET_BOTTOM_CELL_NEIGHBORS
 	else:
-		return [
-			TileSet.CELL_NEIGHBOR_TOP_LEFT_CORNER,
-			TileSet.CELL_NEIGHBOR_TOP_SIDE,
-			TileSet.CELL_NEIGHBOR_TOP_RIGHT_CORNER
-		]
+		return TILE_SET_TOP_CELL_NEIGHBORS
 
 ## Whether this tile has contiguous terrain on all edges.
 ##
@@ -155,7 +168,7 @@ func _has_uniform_tile_edge(tile : Vector2i) -> bool:
 	
 	var is_first : bool = true
 	var target_bit : TileSet.CellNeighbor
-	for bit in valid_tile_set_cell_neighbors:
+	for bit in VALID_TILE_SET_CELL_NEIGHBORS:
 		if !tile_data.is_valid_terrain_peering_bit(bit):
 			return false
 		
