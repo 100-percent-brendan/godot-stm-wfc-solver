@@ -360,7 +360,15 @@ func _place_random_tile(
 	var varied_edge_count : int = 0 ## The number of tiles with varied terrain edges.
 	var total_weight : float = 0.0
 	for tile in possibilities:
-		var weight := 1.0 # TODO: Replace me
+		var tile_data : TileData = _get_tile_data(tile)
+		var weight : float
+		
+		## Get base probability weight from tile data itself
+		if tile_data && tile_data.probability > 0.0:
+			weight = tile_data.probability
+		else:
+			continue
+		
 		var has_uniform_edge := _has_uniform_tile_edge(tile)
 		if has_uniform_edge:
 			solid_edge_count += 1
