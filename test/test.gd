@@ -11,7 +11,7 @@ func _ready() -> void:
 	solver.set_terrain_tile_set(load("res://test/assets/terrain.tres"))
 	solver.set_debug_mode(true)
 	solver.set_debug_delay(0.03)
-	solver.set_dimensions(15, 10)
+	solver.set_dimensions(30, 20)
 	solver.tile_placed.connect(_on_tile_placed)
 	solver.tile_removed.connect(_on_tile_removed)
 	solver.grid_reset.connect(_on_grid_reset)
