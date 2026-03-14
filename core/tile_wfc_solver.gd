@@ -459,55 +459,64 @@ func run() -> TileWFCGrid:
 		DebugSeverity.INFORMATION
 	)
 	
-	# TODO: Place restart retry here
-	var start_time : int = Time.get_ticks_msec() ## When the process started
-	var retry : int = 0 ## The current retry
-	var has_no_solution : bool = false ## If the current solution state is unsolvable
-	
 	var prng := RandomNumberGenerator.new()
 	prng.seed = _seed
 	
-	# TODO: Core logic here.
+	# TODO: Place restart retry here
+	var start_time : int = Time.get_ticks_msec() ## When the process started
+	var retry : int = 0 ## The current retry
+	
 	var terrain_tiles := _get_valid_terrain_tiles()
 	var grid := TileWFCGrid.new(_dimensions.x, _dimensions.y)
 	_init_grid(terrain_tiles, grid)
 	
-	## Spaces, partnered with their coordinates
-	var spaces_left : Array = []
-	var grid_dims := grid.get_dimensions()
-	for y in grid_dims.y:
-		for x in grid_dims.x:
-			spaces_left.push_back([Vector2i(x, y), grid.get_space(x, y)])
-	
-	while spaces_left.size() > 0:
-		if _debug_mode && _debug_delay > 0.0:
-			await Engine.get_main_loop().create_timer(_debug_delay).timeout
-		_sort_spaces_left(spaces_left)
-		var current_space = spaces_left.pop_front()
-		if current_space[1].get_entropy() > 0:
-			_place_random_tile(terrain_tiles, prng, grid, current_space[0])
-		else:
-			# TODO: Add message and mechanism for retry
-			has_no_solution = true
+	while true:
+		var has_no_solution : bool = false ## If the current solution state is unsolvable
+		
+		## Spaces, partnered with their coordinates
+		var spaces_left : Array = []
+		var grid_dims := grid.get_dimensions()
+		for y in grid_dims.y:
+			for x in grid_dims.x:
+				spaces_left.push_back([Vector2i(x, y), grid.get_space(x, y)])
+		
+		while spaces_left.size() > 0:
+			if _debug_mode && _debug_delay > 0.0:
+				await Engine.get_main_loop().create_timer(_debug_delay).timeout
+			_sort_spaces_left(spaces_left)
+			var current_space = spaces_left.pop_front()
+			if current_space[1].get_entropy() > 0:
+				_place_random_tile(terrain_tiles, prng, grid, current_space[0])
+			else:
+				has_no_solution = true
+				break
+		
+		if has_no_solution && retry < _max_retries:
+			retry += 1
+			_print_debug_message(
+				"No solution found. Restarting on retry " + str(retry) + ".",
+				DebugSeverity.INFORMATION
+			)
+			grid = TileWFCGrid.new(_dimensions.x, _dimensions.y)
+			_init_grid(terrain_tiles, grid)
+			if _debug_mode:
+				grid_reset.emit()
+			continue
+		elif has_no_solution:
+			grid.set_failed(TileWFCGrid.FailureCause.NO_SOLUTION)
+			_print_debug_message(
+				"No solution found. Retries exhausted.",
+				DebugSeverity.INFORMATION
+			)
 			break
-	
-	# TODO: REmove me
-	#_sort_spaces_left(spaces_left)
-	#for i in spaces_left:
-	#	print(i, i[1].get_entropy())
-	#print(spaces_left)
-	
-	
-	
-	## TODO: Remove this test
-	var dimensions := grid.get_dimensions()
-	for y in dimensions.y:
-		var line = ""
-		for x in dimensions.x:
-			#if grid.get_space(x, y)._possibilities.size() < 99:
-			#	print(grid.get_space(x, y)._possibilities)
-			line += ("[%-2d]" % grid.get_space(x, y).get_entropy())
-		print(line)
+		else:
+			_print_debug_message(
+				"Solution found.",
+				DebugSeverity.INFORMATION
+			)
+			grid.set_solved()
+			break
+			
 	
 	var end_time : int = Time.get_ticks_msec() ## When the process ended
 	
