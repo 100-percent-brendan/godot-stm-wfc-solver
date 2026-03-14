@@ -440,8 +440,8 @@ func _place_random_tile(
 	var probabilities : Array[Array] = []
 	var solid_edge_weight : float = 0.0 ## Weight of tiles with solid terrain edges.
 	var varied_edge_weight : float = 0.0 ## Weight of tiles with varied terrain edges.
-	var solid_edge_count : int = 0 ## The number of tiles with solid terrain edges.
-	var varied_edge_count : int = 0 ## The number of tiles with varied terrain edges.
+	var varied_flat_weight : float = 0.0 ## Weight of tiles with varied but flat edges.
+	var varied_nonflat_weight : float = 0.0 ## Weight of tiles with varied but non-flat edges.
 	var total_weight : float = 0.0
 	for tile in possibilities:
 		var tile_data : TileData = _get_tile_data(tile)
@@ -456,11 +456,14 @@ func _place_random_tile(
 		var has_uniform_edge := _has_uniform_tile_edges(tile)
 		var has_flat_edge = _has_flat_tile_edge(tile)
 		if has_uniform_edge:
-			solid_edge_count += 1
 			solid_edge_weight += weight
 		else:
-			varied_edge_count += 1
 			varied_edge_weight += weight
+			
+			if has_flat_edge:
+				varied_flat_weight += weight
+			else:
+				varied_nonflat_weight += weight
 			
 		probabilities.push_back([weight, tile, has_uniform_edge, has_flat_edge])
 	
@@ -468,16 +471,25 @@ func _place_random_tile(
 	## and non-edge tiles have a total of 0.95, but respect their original weight
 	## within a category.
 	for prospect in probabilities:
-		if prospect[2]:
+		if prospect[2]: # If the prospect has a uniform edge
 			if solid_edge_weight <= 0.0:
 				continue
-			var weight = (prospect[0] / solid_edge_count / solid_edge_count) * 0.95
+			var weight = (prospect[0] / solid_edge_weight) * 0.95
 			prospect[0] = weight
 			total_weight += weight
-		else:
+		else: # If the prospect has a varied edge
 			if varied_edge_weight <= 0.0:
 				continue
-			var weight = (prospect[0] / varied_edge_weight / varied_edge_count) * 0.05
+			var weight = 0.0
+			if prospect[3]: # If the prospect is considered flat
+				if varied_flat_weight <= 0.0:
+					continue
+				weight = (prospect[0] / varied_flat_weight) * 0.05 * 0.6
+			else: # If the prospect is considered non-flat
+				if varied_nonflat_weight <= 0.0:
+					continue
+				weight = (prospect[0] / varied_nonflat_weight) * 0.05 * 0.4
+				
 			prospect[0] = weight
 			total_weight += weight
 	
