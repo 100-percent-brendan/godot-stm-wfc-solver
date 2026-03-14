@@ -174,7 +174,7 @@ func _has_uniform_tile_edge(tile : Vector2i) -> bool:
 		
 		if is_first:
 			is_first = false
-			target_bit = tile_data.get_terrain_peering_bit(bit)
+			target_bit = tile_data.get_terrain_peering_bit(bit) as TileSet.CellNeighbor
 		elif tile_data.get_terrain_peering_bit(bit) == target_bit:
 			continue
 		else:
@@ -395,7 +395,6 @@ func _place_random_tile(
 	## Re-weight probabilities so that edge pieces have a weight total of 0.05
 	## and non-edge tiles have a total of 0.95, but respect their original weight
 	## within a category.
-	var adjusted_probabilities : Array[Array] = []
 	for prospect in probabilities:
 		if prospect[2]:
 			if solid_edge_weight <= 0.0:

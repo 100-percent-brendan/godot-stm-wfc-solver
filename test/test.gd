@@ -15,7 +15,7 @@ func _ready() -> void:
 	solver.tile_placed.connect(_on_tile_placed)
 	solver.tile_removed.connect(_on_tile_removed)
 	solver.grid_reset.connect(_on_grid_reset)
-	var grid := await solver.run()
+	var _grid := await solver.run()
 	# TODO: Setup code to transpose solution to a tile map layer
 
 func _on_tile_placed(coords : Vector2i, source_id : int, atlas_coords : Vector2i) -> void:
