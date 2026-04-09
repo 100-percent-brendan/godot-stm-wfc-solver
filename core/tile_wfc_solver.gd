@@ -469,8 +469,8 @@ func _place_random_tile(
 	## within a category.
 	const SOLID_PROBABILITY := 0.95
 	const VARIED_PROBABILITY := 0.05
-	const NON_FLAT_PROBABILITY := 0.7
-	const FLAT_PROBABILITY := 0.3
+	const FLAT_PROBABILITY := 0.6
+	const NON_FLAT_PROBABILITY := 0.4
 	for prospect in probabilities:
 		if prospect[2]: # If the prospect has a uniform edge
 			if solid_edge_weight <= 0.0:
@@ -633,7 +633,6 @@ func run() -> TileWFCGrid:
 	var prng := RandomNumberGenerator.new()
 	prng.seed = _seed
 	
-	# TODO: Place restart retry here
 	var start_time : int = Time.get_ticks_msec() ## When the process started
 	var retry : int = 0 ## The current retry
 	

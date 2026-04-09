@@ -7,7 +7,7 @@ var solver : TileWFCSolver
 
 func _ready() -> void:
 	solver = TileWFCSolver.new()
-	solver.set_seed(21)
+	solver.set_seed(44)
 	solver.set_terrain_tile_set(load("res://test/assets/terrain.tres"))
 	solver.set_debug_mode(true)
 	solver.set_debug_delay(0.03)
