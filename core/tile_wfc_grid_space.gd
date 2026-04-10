@@ -11,30 +11,27 @@ enum Status {
 	CLOSED ## The space has a tile in it.
 }
 
-var _source_id : int = 0 ## The source of the tile in the relevant TileSet.
-var _tile_index : int = 0 ## The unique index of the tile in the source.
+var _tile : Vector3i = Vector3i() ## The source ID followed by the atlas coordinates within the source.
 var _status : Status = Status.OPEN ## If the space is populated or not.
-var _possibilities : Array[Vector2i] = [] ## A collection of possible tiles for this space.
+var _possibilities : Array[Vector3i] = [] ## A collection of possible tiles for this space.
 
 ## Set space to contain tile.
 ##
 ## The [param tile] is a source ID and tile index.
-func place_tile(tile : Vector2i) -> void:
-	_source_id = tile[0]
-	_tile_index = tile[1]
+func place_tile(tile : Vector3i) -> void:
+	_tile = tile
 	_status = Status.CLOSED
 	clear_possibilities()
 
 ## Get the tile.
 ##
 ## Be sure to check status to see if a tile exists here first.
-func get_tile() -> Vector2i:
-	return Vector2i(_source_id, _tile_index)
+func get_tile() -> Vector3i:
+	return _tile
 
 ## Reset space to open.
 func open_space() -> void:
-	_source_id = 0
-	_tile_index = 0
+	_tile = Vector3i()
 	_status = Status.OPEN
 
 ## Get the status.
@@ -44,8 +41,8 @@ func get_status() -> Status:
 ## Add a possible tile this space could be occupied with.
 ##
 ## The [param tile] is a source ID and tile index.
-func add_possibility(tile : Vector2i):
-	_possibilities.push_back(Vector2i(tile))
+func add_possibility(tile : Vector3i):
+	_possibilities.push_back(Vector3i(tile))
 
 ## Clear the possible tiles that could go into this space.
 func clear_possibilities():
@@ -60,5 +57,5 @@ func get_entropy() -> int:
 ## Get the array of possibilities.
 ##
 ## This is a direct reference, do not modify it.
-func get_possibilities() -> Array[Vector2i]:
+func get_possibilities() -> Array[Vector3i]:
 	return _possibilities

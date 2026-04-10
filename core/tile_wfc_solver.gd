@@ -1,5 +1,5 @@
 class_name TileWFCSolver extends Node
-## Tile-based wave function collapse (WFC) solver.
+## Simple tiled model wave function collapse (WFC) solver.
 ##
 ## This supports square tiles with edge and corner terrain matching.
 ## This does not suppose alternate tiles.
@@ -87,6 +87,49 @@ var _seed : int = 0 ## The seed used in the pseudorandom number generator (PRNG)
 var _dimensions : Vector2i = Vector2i(MIN_SIZE, MIN_SIZE) ## The dimensions of the scene grid.
 var _max_retries : int = 100 ## The maximum number of retry attempts.
 var _terrain_tile_set : TileSet ## The tileset for the terrain.
+var _probabilities : Dictionary ## The probabilities used for adjacency constraints.
+
+## Initialize the wave function collapse solver.
+##
+## The [param tile_set] is expected to have a single terrain layer, and for all tiles
+## to be one-tile-by-one-tile.
+##
+## The [param input_maps] are expected to contain examples of tile maps used to
+## configure pattern probabilities.
+func _init(tile_set : TileSet, input_maps : Array[TileMapLayer]) -> void:
+	_terrain_tile_set = tile_set
+	# TODO: Verify terrain elements here
+	_process_input_maps(input_maps)
+
+## Process the input maps.
+##
+## The [param input_maps] are expected to contain examples of tile maps which are
+## used to extract pattern probabilities.
+func _process_input_maps(input_maps : Array[TileMapLayer]) -> void:
+	_probabilities = {}
+	
+	# Interate over cells and check neighbors for adjacency
+	# Add one to probabilities for each neighbor seen
+	# Ignore empty cells
+	for map in input_maps:
+		# Ensure tile set matches
+		if !map.tile_set || map.tile_set != _terrain_tile_set:
+			continue
+		
+		for cell in map.get_used_cells():
+			var source_id = map.get_cell_source_id(cell)
+			var atlas_coords = map.get_cell_atlas_coords(cell)
+			var source = map.tile_set.get_source(source_id)
+			if source is TileSetAtlasSource:
+				var unique_id : Vector3i = Vector3i(source_id, atlas_coords.x, atlas_coords.y)
+				if !_probabilities.has(unique_id):
+					_probabilities[unique_id] = {"count": 0}
+				_probabilities[unique_id].count += 1
+				
+				# TODO: Left, right, top, bottom
+				
+	print(_probabilities)
+	# ------------------------------------------------------------------------------------------------------- HERE
 
 ## Conditionally output a debug message.
 func _print_debug_message(message: String, severity : DebugSeverity) -> void:
@@ -101,13 +144,13 @@ func _print_debug_message(message: String, severity : DebugSeverity) -> void:
 
 ## Get all valid possible tiles from the terrain tile set.
 ##
-## Returns an array containing the source ID and tile index as a [Vector2i].
-func _get_valid_terrain_tiles() -> Array[Vector2i]:
+## Returns an array containing the source ID and atlas coordinates as a [Vector3i].
+func _get_valid_terrain_tiles() -> Array[Vector3i]:
 	# TODO: Add check for get_terrain_set_counts.
 	if !_terrain_tile_set:
 		return []
 	
-	var _valid_tiles : Array[Vector2i] = []
+	var _valid_tiles : Array[Vector3i] = []
 	for i in range(_terrain_tile_set.get_source_count()):
 		var source_id := _terrain_tile_set.get_source_id(i)
 		var source := _terrain_tile_set.get_source(source_id)
@@ -115,18 +158,19 @@ func _get_valid_terrain_tiles() -> Array[Vector2i]:
 		if source is TileSetAtlasSource:
 			for j in range(source.get_tiles_count()):
 				# TODO: Add check here to see if tile is included by custom criteria
-				_valid_tiles.push_back(Vector2i(source_id, j))
+				var atlas_coords = source.get_tile_id(j)
+				_valid_tiles.push_back(Vector3i(source_id, atlas_coords.x, atlas_coords.y))
 	
 	return _valid_tiles
 
 ## Get tile data.
 ##
 ## This uses the source ID and tile index packaged into a [Vector2i] to get tile data.
-func _get_tile_data(tile : Vector2i) -> TileData:
+func _get_tile_data(tile : Vector3i) -> TileData:
 	var source := _terrain_tile_set.get_source(tile.x)
 	if source is TileSetAtlasSource:
 		## Alterrnative tiles are not supported, so the second parameter is 0
-		var tile_data : TileData = source.get_tile_data(source.get_tile_id(tile.y), 0)
+		var tile_data : TileData = source.get_tile_data(Vector2i(tile.y, tile.z), 0)
 		return tile_data
 	
 	return null
@@ -156,106 +200,11 @@ func _get_tile_set_cell_neighbors(
 	else:
 		return TILE_SET_TOP_CELL_NEIGHBORS
 
-## Whether this tile has contiguous terrain on all edges.
-##
-## If the same terrain is on all edges it returns true, otherwise it returns false.
-func _has_uniform_tile_edges(tile : Vector2i) -> bool:
-	# TODO: Precomputer this
-	var tile_data : TileData = _get_tile_data(tile)
-	if !tile_data:
-		return false
-	
-	var is_first : bool = true
-	var target_terrain : int
-	for bit in VALID_TILE_SET_CELL_NEIGHBORS:
-		if !tile_data.is_valid_terrain_peering_bit(bit):
-			return false
-		
-		if is_first:
-			is_first = false
-			target_terrain = tile_data.get_terrain_peering_bit(bit)
-		elif tile_data.get_terrain_peering_bit(bit) == target_terrain:
-			continue
-		else:
-			return false
-	
-	return true
-
-## Whether this tile has an edge that is considered "flat".
-##
-## This checks to see if one edge of a tile is a single terrain, and all the
-## other edges are another.
-func _has_flat_tile_edge(tile : Vector2i) -> bool:
-	# TODO: Precomputer this
-	
-	var tile_data : TileData = _get_tile_data(tile)
-	if !tile_data:
-		return false
-	
-	var found_match : bool = false
-	for edge_neighbors : Array[TileSet.CellNeighbor] in [
-		TILE_SET_TOP_CELL_NEIGHBORS, TILE_SET_RIGHT_CELL_NEIGHBORS,
-		TILE_SET_BOTTOM_CELL_NEIGHBORS, TILE_SET_LEFT_CELL_NEIGHBORS
-	]:
-		var is_first : bool = true
-		var target_terrain : int
-		var match_count : int = 0
-		for bit in edge_neighbors:
-			if !tile_data.is_valid_terrain_peering_bit(bit):
-				return false
-			
-			if is_first:
-				is_first = false
-				target_terrain = tile_data.get_terrain_peering_bit(bit)
-				match_count += 1
-				continue
-			elif tile_data.get_terrain_peering_bit(bit) == target_terrain:
-				match_count += 1
-				continue
-			else:
-				break
-			
-		if match_count == 3:
-			found_match = true
-			break
-	
-	# No edges are uniform terrain
-	if !found_match:
-		return false
-	
-	# The following simplifies seeing if the terrain within the tile matches
-	# the function's criteria for being flat.
-	# If there are more or less than two terrains, halt. If there is one terrain
-	# with three references, it matches the criteria of being "flat", by process
-	# of elimination. Otherwise, halt.
-	#
-	# This is possible because a matching edge has already been discovered above.
-	# TODO: Update comments to reference peering bits, instead of neighbors.
-	var terrain_counts : Dictionary[int, int]
-	for bit in VALID_TILE_SET_CELL_NEIGHBORS:
-		if !tile_data.is_valid_terrain_peering_bit(bit):
-			return false
-		
-		var terrain : int = tile_data.get_terrain_peering_bit(bit)
-		if terrain_counts.has(terrain):
-			terrain_counts[terrain] += 1
-		else:
-			terrain_counts[terrain] = 1
-	
-	if terrain_counts.size() > 2 || terrain_counts.size() < 2:
-		return false
-	
-	for terrain in terrain_counts:
-		if terrain_counts[terrain] == 3:
-			return true
-	
-	return false
-
 ## Helper for getting the insection of two Vector2i arrays.
 ##
 ## Order is not guarenteed.
-func _get_vector2i_array_intersection(a : Array[Vector2i], b : Array[Vector2i]) -> Array[Vector2i]:
-	var c : Array[Vector2i] = []
+func _get_vector3i_array_intersection(a : Array[Vector3i], b : Array[Vector3i]) -> Array[Vector3i]:
+	var c : Array[Vector3i] = []
 	
 	if !a || !b:
 		return c
@@ -273,7 +222,7 @@ func _get_vector2i_array_intersection(a : Array[Vector2i], b : Array[Vector2i]) 
 ## constraints. The [param direction] is used to determine how the tiles are
 ## positioned compared to each other.
 func _compare_terrain_tiles(
-	tile_a : Vector2i, tile_b : Vector2i, direction : ComparisonDirection
+	tile_a : Vector3i, tile_b : Vector3i, direction : ComparisonDirection
 ) -> bool:
 	if !_terrain_tile_set:
 		return false
@@ -313,7 +262,7 @@ func _compare_terrain_tiles(
 ##
 ## Requires a list of valid terrain tiles, the grid, and the coordinates of
 ## which space is being updated.
-func _update_space_possibilities(terrain_tiles : Array[Vector2i], grid : TileWFCGrid, coords : Vector2i) -> void:
+func _update_space_possibilities(terrain_tiles : Array[Vector3i], grid : TileWFCGrid, coords : Vector2i) -> void:
 	if !terrain_tiles || !grid:
 		return
 	
@@ -344,7 +293,7 @@ func _update_space_possibilities(terrain_tiles : Array[Vector2i], grid : TileWFC
 		ComparisonDirection.RIGHT_TO_LEFT
 	])
 	
-	var combined_possibilities : Array[Vector2i] = terrain_tiles.duplicate()
+	var combined_possibilities : Array[Vector3i] = terrain_tiles.duplicate()
 	var possibility_spaces : Array[Array] = []
 	
 	for neighbor_space in neighbor_spaces:
@@ -356,14 +305,14 @@ func _update_space_possibilities(terrain_tiles : Array[Vector2i], grid : TileWFC
 			continue
 		
 		# TODO: Optimize: Move building this to a central step and tile-specific index
-		var possibilities : Array[Vector2i]
+		var possibilities : Array[Vector3i]
 		for tile in terrain_tiles:
 			if _compare_terrain_tiles(tile, neighbor.get_tile(), direction):
 				possibilities.push_back(tile)
 		possibility_spaces.push_back(possibilities)
 	
 	for possibilities in possibility_spaces:
-		combined_possibilities = _get_vector2i_array_intersection(combined_possibilities, possibilities)
+		combined_possibilities = _get_vector3i_array_intersection(combined_possibilities, possibilities)
 	
 	space.clear_possibilities()
 	for tile in combined_possibilities:
@@ -376,8 +325,8 @@ func _update_space_possibilities(terrain_tiles : Array[Vector2i], grid : TileWFC
 ## Requires a list of valid terrain tiles, the grid, the coordinates of
 ## which space is being changed, and the tile its being changed to (or the remove flag).
 func _place_tile(
-	terrain_tiles : Array[Vector2i], grid : TileWFCGrid, coords : Vector2i,
-	tile : Vector2i, remove_tile : bool = false
+	terrain_tiles : Array[Vector3i], grid : TileWFCGrid, coords : Vector2i,
+	tile : Vector3i, remove_tile : bool = false
 ) -> void:
 	if !terrain_tiles || !grid:
 		return
@@ -396,7 +345,7 @@ func _place_tile(
 		if _debug_mode:
 			var source := _terrain_tile_set.get_source(tile.x)
 			if source is TileSetAtlasSource:
-				tile_placed.emit(coords, tile.x, source.get_tile_id(tile.y))
+				tile_placed.emit(coords, tile.x, Vector2i(tile.y, tile.z))
 	
 	## Surrounding spaces are organized top, right, bottom, and then left.
 	var neighbor_coords : Array[Vector2i] = []
@@ -419,7 +368,7 @@ func _place_tile(
 ##
 ## If was able to roll to place a tile, will return true, otherwise false.
 func _place_random_tile(
-	terrain_tiles : Array[Vector2i], prng : RandomNumberGenerator, grid : TileWFCGrid, coords : Vector2i
+	terrain_tiles : Array[Vector3i], prng : RandomNumberGenerator, grid : TileWFCGrid, coords : Vector2i
 ) -> bool:
 	# TODO: Upgrade this to take into account tile probabilities
 	
@@ -435,12 +384,8 @@ func _place_random_tile(
 	if possibilities.size() < 1:
 		return false
 	
-	## Each probability prospect has a weight, a tile, if the edge is uniform,
-	## and if the tile is "flat".
-	var probabilities : Array[Array] = []
-	var solid_edge_weight : float = 0.0 ## Weight of tiles with solid terrain edges.
-	var varied_flat_weight : float = 0.0 ## Weight of tiles with varied but flat edges.
-	var varied_nonflat_weight : float = 0.0 ## Weight of tiles with varied but non-flat edges.
+	## Each probability prospect has a weight and a tile.
+	var probabilities : Array[Array] = [] # ------------------------------------------------------------------------------------------------------- HERE
 	var total_weight : float = 0.0
 	for tile in possibilities:
 		var tile_data : TileData = _get_tile_data(tile)
@@ -451,46 +396,9 @@ func _place_random_tile(
 			weight = tile_data.probability
 		else:
 			continue
-		
-		var has_uniform_edge := _has_uniform_tile_edges(tile)
-		var has_flat_edge = _has_flat_tile_edge(tile)
-		if has_uniform_edge:
-			solid_edge_weight += weight
-		else:
-			if has_flat_edge:
-				varied_flat_weight += weight
-			else:
-				varied_nonflat_weight += weight
 			
-		probabilities.push_back([weight, tile, has_uniform_edge, has_flat_edge])
-	
-	## Re-weight probabilities so that edge pieces have a weight total of 0.05
-	## and non-edge tiles have a total of 0.95, but respect their original weight
-	## within a category.
-	const SOLID_PROBABILITY := 0.95
-	const VARIED_PROBABILITY := 0.05
-	const FLAT_PROBABILITY := 0.6
-	const NON_FLAT_PROBABILITY := 0.4
-	for prospect in probabilities:
-		if prospect[2]: # If the prospect has a uniform edge
-			if solid_edge_weight <= 0.0:
-				continue
-			var weight = (prospect[0] / solid_edge_weight) * SOLID_PROBABILITY
-			prospect[0] = weight
-			total_weight += weight
-		else: # If the prospect has a varied edge
-			var weight = 0.0
-			if prospect[3]: # If the prospect is considered flat
-				if varied_flat_weight <= 0.0:
-					continue
-				weight = (prospect[0] / varied_flat_weight) * VARIED_PROBABILITY * FLAT_PROBABILITY
-			else: # If the prospect is considered non-flat
-				if varied_nonflat_weight <= 0.0:
-					continue
-				weight = (prospect[0] / varied_nonflat_weight) * VARIED_PROBABILITY * NON_FLAT_PROBABILITY
-				
-			prospect[0] = weight
-			total_weight += weight
+		probabilities.push_back([weight, tile])
+		total_weight += weight
 	
 	if total_weight <= 0.0:
 		return false
@@ -512,15 +420,15 @@ func _place_random_tile(
 ## Requires a list of valid terrain tiles, the grid, and the coordinates of
 ## the space where the tile is being removed.
 func _remove_tile(
-	terrain_tiles : Array[Vector2i], grid : TileWFCGrid, coords : Vector2i
+	terrain_tiles : Array[Vector3i], grid : TileWFCGrid, coords : Vector2i
 ) -> void:
-	_place_tile(terrain_tiles, grid, coords, Vector2i(), true)
+	_place_tile(terrain_tiles, grid, coords, Vector3i(), true)
 
 ## Initialize grid.
 ##
 ## Initialize the [TileWFCGrid] with possibilities.
 ## Requires a list of valid terrain tiles and the grid.
-func _init_grid(terrain_tiles : Array[Vector2i], grid : TileWFCGrid) -> void:
+func _init_grid(terrain_tiles : Array[Vector3i], grid : TileWFCGrid) -> void:
 	if !terrain_tiles || terrain_tiles.is_empty():
 		_print_debug_message("No terrain tiles available.", DebugSeverity.WARNING)
 		return
@@ -536,7 +444,7 @@ func _init_grid(terrain_tiles : Array[Vector2i], grid : TileWFCGrid) -> void:
 
 ## Sort spaces left.
 ##
-## This is a helper function that sorts the spaces left array first by entropy left
+## This is a helper function that sorts the spaces left array first by entropy
 ## (to choose the lowest entropy space) and then by distance from the center.
 ##
 ## The general idea is that by starting in the center, and working on the
@@ -553,6 +461,7 @@ func _sort_spaces_left(spaces_left : Array) -> void:
 func _compare_spaces_left(a, b):
 	if a[1].get_entropy() == b[1].get_entropy():
 		return a[0].distance_to(_dimensions/2.0) < b[0].distance_to(_dimensions/2.0)
+	# TODO: Make this into true Shannon entropy
 	return a[1].get_entropy() < b[1].get_entropy()
 
 ## Configure if the solver will output debug messages and information.
@@ -579,13 +488,6 @@ func set_dimensions(width : int, height : int):
 ## This must be a positive integer.
 func set_max_retries(max_retries : int) -> void:
 	_max_retries = maxi(max_retries, 1)
-
-## Set the tile set used for terrain.
-##
-## The tile set is expected to have a single terrain layer, and for all tiles
-## to be 1-tile-by-1-tile.
-func set_terrain_tile_set(tile_set : TileSet):
-	_terrain_tile_set = tile_set
 
 ## Check if the solver is ready to be run.
 ##

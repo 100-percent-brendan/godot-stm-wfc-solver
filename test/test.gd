@@ -6,11 +6,11 @@ extends Node2D
 var solver : TileWFCSolver
 
 func _ready() -> void:
-	solver = TileWFCSolver.new()
+	var input1 = load("res://test/assets/input1.tscn").instantiate()
+	solver = TileWFCSolver.new(load("res://test/assets/terrain.tres"), [input1])
 	solver.set_seed(44)
-	solver.set_terrain_tile_set(load("res://test/assets/terrain.tres"))
 	solver.set_debug_mode(true)
-	solver.set_debug_delay(0.03)
+	solver.set_debug_delay(0.01)
 	solver.set_dimensions(30, 20)
 	solver.tile_placed.connect(_on_tile_placed)
 	solver.tile_removed.connect(_on_tile_removed)
