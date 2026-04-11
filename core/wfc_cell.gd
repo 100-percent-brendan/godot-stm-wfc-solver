@@ -13,7 +13,7 @@ enum Status {
 
 var _tile : Vector3i = Vector3i() ## The source ID followed by the atlas coordinates within the source.
 var _status : Status = Status.OPEN ## If the cell is populated or not.
-var _possibilities : Array[Vector3i] = [] ## A collection of possible tiles for this cell.
+var _possibilities : Dictionary[Vector3i, float] = {} ## A collection of possible tiles with weights for this cell.
 
 ## Set cell to contain tile.
 ##
@@ -40,13 +40,13 @@ func get_status() -> Status:
 
 ## Add a possible tile this cell could be occupied with.
 ##
-## The [param tile] is a source ID and tile index.
-func add_possibility(tile : Vector3i):
-	_possibilities.push_back(Vector3i(tile))
+## The [param tile] is a source ID and atlas coords.
+func add_possibility(weight : float, tile : Vector3i):
+	_possibilities[tile] = weight
 
 ## Clear the possible tiles that could go into this cell.
 func clear_possibilities():
-	_possibilities = []
+	_possibilities = {}
 
 ## Get the entropy of the cell.
 ##
@@ -57,5 +57,5 @@ func get_entropy() -> int:
 ## Get the array of possibilities.
 ##
 ## This is a direct reference, do not modify it.
-func get_possibilities() -> Array[Vector3i]:
+func get_possibilities() -> Dictionary[Vector3i, float]:
 	return _possibilities

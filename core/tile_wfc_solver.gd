@@ -37,46 +37,6 @@ enum ComparisonDirection {
 	BOTTOM_TO_TOP ## A bottom-to-top tile comparison.
 }
 
-## All valid tile set cell neighbors.
-const VALID_TILE_SET_CELL_NEIGHBORS : Array[TileSet.CellNeighbor] = [
-	TileSet.CELL_NEIGHBOR_BOTTOM_LEFT_CORNER,
-	TileSet.CELL_NEIGHBOR_LEFT_SIDE,
-	TileSet.CELL_NEIGHBOR_TOP_LEFT_CORNER,
-	TileSet.CELL_NEIGHBOR_TOP_SIDE,
-	TileSet.CELL_NEIGHBOR_TOP_RIGHT_CORNER,
-	TileSet.CELL_NEIGHBOR_RIGHT_SIDE,
-	TileSet.CELL_NEIGHBOR_BOTTOM_RIGHT_CORNER,
-	TileSet.CELL_NEIGHBOR_BOTTOM_SIDE
-]
-
-## Tile set cell neighbors for the top edge.
-const TILE_SET_TOP_CELL_NEIGHBORS : Array[TileSet.CellNeighbor] = [
-	TileSet.CELL_NEIGHBOR_TOP_LEFT_CORNER,
-	TileSet.CELL_NEIGHBOR_TOP_SIDE,
-	TileSet.CELL_NEIGHBOR_TOP_RIGHT_CORNER
-]
-
-## Tile set cell neighbors for the right edge.
-const TILE_SET_RIGHT_CELL_NEIGHBORS : Array[TileSet.CellNeighbor] = [
-	TileSet.CELL_NEIGHBOR_TOP_RIGHT_CORNER,
-	TileSet.CELL_NEIGHBOR_RIGHT_SIDE,
-	TileSet.CELL_NEIGHBOR_BOTTOM_RIGHT_CORNER
-]
-
-## Tile set cell neighbors for the bottom edge.
-const TILE_SET_BOTTOM_CELL_NEIGHBORS : Array[TileSet.CellNeighbor] = [
-	TileSet.CELL_NEIGHBOR_BOTTOM_LEFT_CORNER,
-	TileSet.CELL_NEIGHBOR_BOTTOM_SIDE,
-	TileSet.CELL_NEIGHBOR_BOTTOM_RIGHT_CORNER
-]
-
-## Tile set cell neighbors for the left edge.
-const TILE_SET_LEFT_CELL_NEIGHBORS : Array[TileSet.CellNeighbor] = [
-	TileSet.CELL_NEIGHBOR_TOP_LEFT_CORNER,
-	TileSet.CELL_NEIGHBOR_LEFT_SIDE,
-	TileSet.CELL_NEIGHBOR_BOTTOM_LEFT_CORNER
-]
-
 
 const MIN_SIZE : int = 6 ## The minimum size of the scene grid in each dimension.
 
@@ -123,7 +83,8 @@ func _process_input_maps(input_maps : Array[TileMapLayer]) -> void:
 			if source is TileSetAtlasSource:
 				var unique_id : Vector3i = Vector3i(source_id, atlas_coords.x, atlas_coords.y)
 				if !_neighbor_counts.has(unique_id):
-					_neighbor_counts[unique_id] = {"neighbors": {}}
+					_neighbor_counts[unique_id] = {"count": 0, "neighbors": {}}
+				_neighbor_counts[unique_id].count += 1
 				
 				## Surrounding cells are organized top, right, bottom, and then left.
 				var neighbor_cells : Array = []
@@ -177,55 +138,11 @@ func _get_valid_terrain_tiles() -> Array[Vector3i]:
 	if !_terrain_tile_set:
 		return []
 	
-	var _valid_tiles : Array[Vector3i] = []
-	for i in range(_terrain_tile_set.get_source_count()):
-		var source_id := _terrain_tile_set.get_source_id(i)
-		var source := _terrain_tile_set.get_source(source_id)
-		
-		if source is TileSetAtlasSource:
-			for j in range(source.get_tiles_count()):
-				# TODO: Add check here to see if tile is included by custom criteria
-				var atlas_coords = source.get_tile_id(j)
-				_valid_tiles.push_back(Vector3i(source_id, atlas_coords.x, atlas_coords.y))
+	var valid_tiles : Array[Vector3i] = []
+	for i : Vector3i in _neighbor_counts:
+		valid_tiles.push_back(i)
 	
-	return _valid_tiles
-
-## Get tile data.
-##
-## This uses the source ID and tile index packaged into a [Vector2i] to get tile data.
-func _get_tile_data(tile : Vector3i) -> TileData:
-	var source := _terrain_tile_set.get_source(tile.x)
-	if source is TileSetAtlasSource:
-		## Alterrnative tiles are not supported, so the second parameter is 0
-		var tile_data : TileData = source.get_tile_data(Vector2i(tile.y, tile.z), 0)
-		return tile_data
-	
-	return null
-
-## Helper function that outputs the [TileSet.CellNeighbor] values on an edge.
-##
-## This is only intended to be used within internal comparison functions.
-## It is guarenteed to return three values.
-func _get_tile_set_cell_neighbors(
-	is_a : bool, direction : ComparisonDirection
-) -> Array[TileSet.CellNeighbor]:
-	if (
-		(direction == ComparisonDirection.LEFT_TO_RIGHT && is_a) ||\
-		(direction == ComparisonDirection.RIGHT_TO_LEFT && !is_a)
-	):
-		return TILE_SET_RIGHT_CELL_NEIGHBORS
-	elif (
-		(direction == ComparisonDirection.RIGHT_TO_LEFT && is_a) ||\
-		(direction == ComparisonDirection.LEFT_TO_RIGHT && !is_a)
-	):
-		return TILE_SET_LEFT_CELL_NEIGHBORS
-	elif (
-		(direction == ComparisonDirection.TOP_TO_BOTTOM && is_a) ||\
-		(direction == ComparisonDirection.BOTTOM_TO_TOP && !is_a)
-	):
-		return TILE_SET_BOTTOM_CELL_NEIGHBORS
-	else:
-		return TILE_SET_TOP_CELL_NEIGHBORS
+	return valid_tiles
 
 ## Helper for getting the insection of two Vector2i arrays.
 ##
@@ -241,49 +158,6 @@ func _get_vector3i_array_intersection(a : Array[Vector3i], b : Array[Vector3i]) 
 			c.push_back(q)
 	
 	return c
-		
-
-## Compare two tiles to see if one can be placed next to another.
-##
-## This checks to have matching terrain on their facing edges and other
-## constraints. The [param direction] is used to determine how the tiles are
-## positioned compared to each other.
-func _compare_terrain_tiles(
-	tile_a : Vector3i, tile_b : Vector3i, direction : ComparisonDirection
-) -> bool:
-	if !_terrain_tile_set:
-		return false
-	
-	var tile_data_a : TileData = _get_tile_data(tile_a)
-	var tile_data_b : TileData = _get_tile_data(tile_b)
-	
-	## Enforce that terrains must be comparable, then compare the edges
-	# TODO: Add validation somewhere to make sure tile set supports the right TerrainMode
-	if tile_data_a && tile_data_b && tile_data_a.terrain_set == tile_data_b.terrain_set:
-		## Get the cell neighbors, used to compare terrain values
-		var a_cell_neighbors : Array[TileSet.CellNeighbor] = _get_tile_set_cell_neighbors(true, direction)
-		var b_cell_neighbors : Array[TileSet.CellNeighbor] = _get_tile_set_cell_neighbors(false, direction)
-		
-		var matches : int = 0
-		for i in range(3):
-			var bit_a : TileSet.CellNeighbor = a_cell_neighbors[i]
-			var bit_b : TileSet.CellNeighbor = b_cell_neighbors[i]
-			
-			## Ensure the edges have valid terrain bits prior to comparison
-			if !tile_data_a.is_valid_terrain_peering_bit(bit_a):
-				continue
-			if !tile_data_b.is_valid_terrain_peering_bit(bit_b):
-				continue
-			
-			## Compare the terrain bit in the edges to see if they have matching terrain
-			if tile_data_a.get_terrain_peering_bit(bit_a) == tile_data_b.get_terrain_peering_bit(bit_b):
-				matches += 1
-		
-		## The edges match
-		if matches == 3:
-			return true
-	
-	return false
 
 ## Update the terrain possibilities within a cell.
 ##
@@ -320,8 +194,11 @@ func _update_cell_possibilities(terrain_tiles : Array[Vector3i], grid : WFCGrid,
 		ComparisonDirection.RIGHT_TO_LEFT
 	])
 	
-	var combined_possibilities : Array[Vector3i] = terrain_tiles.duplicate()
-	var possibility_spaces : Array[Array] = []
+	# Start with base weights and widdle down the possibilities.
+	var possibilities : Dictionary[Vector3i, float] = {}
+	for tile : Vector3i in terrain_tiles:
+		if _neighbor_counts.has(tile) && _neighbor_counts[tile].count > 0:
+			possibilities[tile] = _neighbor_counts[tile].count
 	
 	for neighbor_cell in neighbor_cells:
 		var neighbor : WFCCell = neighbor_cell[0]
@@ -331,19 +208,23 @@ func _update_cell_possibilities(terrain_tiles : Array[Vector3i], grid : WFCGrid,
 		if !neighbor || neighbor.get_status() == WFCCell.Status.OPEN:
 			continue
 		
-		# TODO: Optimize: Move building this to a central step and tile-specific index
-		var possibilities : Array[Vector3i]
+		var neighbor_tile : Vector3i = neighbor.get_tile()
+		if !_neighbor_counts[neighbor_tile] || !_neighbor_counts[neighbor_tile].neighbors.has(direction):
+			continue
+		
 		for tile in terrain_tiles:
-			if _compare_terrain_tiles(tile, neighbor.get_tile(), direction):
-				possibilities.push_back(tile)
-		possibility_spaces.push_back(possibilities)
-	
-	for possibilities in possibility_spaces:
-		combined_possibilities = _get_vector3i_array_intersection(combined_possibilities, possibilities)
+			if _neighbor_counts[neighbor_tile].neighbors[direction].has(tile):
+				if possibilities.has(tile):
+					# Choose the most constrained weight, either the existing weight or the one provided by the neighbor
+					if possibilities[tile] > _neighbor_counts[neighbor_tile].neighbors[direction][tile]:
+						possibilities[tile] = _neighbor_counts[neighbor_tile].neighbors[direction][tile]
+			else:
+				# Remove an invalid possibility
+				possibilities.erase(tile)
 	
 	cell.clear_possibilities()
-	for tile in combined_possibilities:
-		cell.add_possibility(tile)
+	for tile in possibilities.keys():
+		cell.add_possibility(possibilities[tile], tile)
 
 ## Place or remove a tile from a cell.
 ##
@@ -412,31 +293,21 @@ func _place_random_tile(
 		return false
 	
 	## Each probability prospect has a weight and a tile.
-	var probabilities : Array[Array] = [] # ------------------------------------------------------------------------------------------------------- HERE
 	var total_weight : float = 0.0
 	for tile in possibilities:
-		var tile_data : TileData = _get_tile_data(tile)
-		var weight : float
-		
-		## Get base probability weight from tile data itself
-		if tile_data && tile_data.probability > 0.0:
-			weight = tile_data.probability
-		else:
-			continue
-			
-		probabilities.push_back([weight, tile])
-		total_weight += weight
+		total_weight += possibilities[tile]
 	
 	if total_weight <= 0.0:
 		return false
 	
 	var roll := prng.randf() * total_weight
-	for prospect in probabilities:
-		if roll <= prospect[0]:
-			_place_tile(terrain_tiles, grid, coords, prospect[1])
+	for tile in possibilities:
+		var weight := possibilities[tile]
+		if roll <= weight:
+			_place_tile(terrain_tiles, grid, coords, tile)
 			return true
 		
-		roll -= prospect[0]
+		roll -= weight
 	
 	return false
 
