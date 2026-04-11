@@ -87,7 +87,7 @@ var _seed : int = 0 ## The seed used in the pseudorandom number generator (PRNG)
 var _dimensions : Vector2i = Vector2i(MIN_SIZE, MIN_SIZE) ## The dimensions of the scene grid.
 var _max_retries : int = 100 ## The maximum number of retry attempts.
 var _terrain_tile_set : TileSet ## The tileset for the terrain.
-var _probabilities : Dictionary ## The probabilities used for adjacency constraints.
+var _neighbor_counts : Dictionary ## The neighbor counts used for adjacency constraints and probabilities.
 
 ## Initialize the wave function collapse solver.
 ##
@@ -106,7 +106,7 @@ func _init(tile_set : TileSet, input_maps : Array[TileMapLayer]) -> void:
 ## The [param input_maps] are expected to contain examples of tile maps which are
 ## used to extract pattern probabilities.
 func _process_input_maps(input_maps : Array[TileMapLayer]) -> void:
-	_probabilities = {}
+	_neighbor_counts = {}
 	
 	# Interate over cells and check neighbors for adjacency
 	# Add one to probabilities for each neighbor seen
@@ -122,14 +122,41 @@ func _process_input_maps(input_maps : Array[TileMapLayer]) -> void:
 			var source = map.tile_set.get_source(source_id)
 			if source is TileSetAtlasSource:
 				var unique_id : Vector3i = Vector3i(source_id, atlas_coords.x, atlas_coords.y)
-				if !_probabilities.has(unique_id):
-					_probabilities[unique_id] = {"count": 0}
-				_probabilities[unique_id].count += 1
+				if !_neighbor_counts.has(unique_id):
+					_neighbor_counts[unique_id] = {"neighbors": {}}
 				
-				# TODO: Left, right, top, bottom
+				## Surrounding spaces are organized top, right, bottom, and then left.
+				var neighbor_spaces : Array = []
+				neighbor_spaces.push_back([
+					Vector2i(cell.x, cell.y - 1), ComparisonDirection.BOTTOM_TO_TOP
+				])
+				neighbor_spaces.push_back([
+					Vector2i(cell.x + 1, cell.y), ComparisonDirection.LEFT_TO_RIGHT
+				])
+				neighbor_spaces.push_back([
+					Vector2i(cell.x, cell.y + 1), ComparisonDirection.TOP_TO_BOTTOM
+				])
+				neighbor_spaces.push_back([
+					Vector2i(cell.x - 1, cell.y), ComparisonDirection.RIGHT_TO_LEFT
+				])
 				
-	print(_probabilities)
-	# ------------------------------------------------------------------------------------------------------- HERE
+				for neighbor in neighbor_spaces:
+					var neighbor_source_id = map.get_cell_source_id(neighbor[0])
+					var neighbor_atlas_coords = map.get_cell_atlas_coords(neighbor[0])
+					if neighbor_source_id == -1:
+						continue
+					
+					var neighbor_tile : Vector3i = Vector3i(
+						neighbor_source_id, neighbor_atlas_coords.x, neighbor_atlas_coords.y
+					)
+					
+					if !_neighbor_counts[unique_id].neighbors.has(neighbor[1]):
+						_neighbor_counts[unique_id].neighbors[neighbor[1]] = {}
+					
+					if !_neighbor_counts[unique_id].neighbors[neighbor[1]].has(neighbor_tile):
+						_neighbor_counts[unique_id].neighbors[neighbor[1]][neighbor_tile] = 0
+					
+					_neighbor_counts[unique_id].neighbors[neighbor[1]][neighbor_tile] += 1
 
 ## Conditionally output a debug message.
 func _print_debug_message(message: String, severity : DebugSeverity) -> void:
