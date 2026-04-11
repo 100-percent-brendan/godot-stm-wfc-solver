@@ -167,7 +167,7 @@ func _update_cell_possibilities(terrain_tiles : Array[Vector3i], grid : WFCGrid,
 	if !terrain_tiles || !grid:
 		return
 	
-	var cell := grid.get_cell(coords.x, coords.y)
+	var cell : WFCCell = grid.get_cell(coords.x, coords.y)
 	if !cell:
 		return
 	
@@ -222,9 +222,7 @@ func _update_cell_possibilities(terrain_tiles : Array[Vector3i], grid : WFCGrid,
 				# Remove an invalid possibility
 				possibilities.erase(tile)
 	
-	cell.clear_possibilities()
-	for tile in possibilities.keys():
-		cell.add_possibility(possibilities[tile], tile)
+	cell.set_possibilites(possibilities)
 
 ## Place or remove a tile from a cell.
 ##
@@ -278,8 +276,6 @@ func _place_tile(
 func _place_random_tile(
 	terrain_tiles : Array[Vector3i], prng : RandomNumberGenerator, grid : WFCGrid, coords : Vector2i
 ) -> bool:
-	# TODO: Upgrade this to take into account tile probabilities
-	
 	if terrain_tiles.size() < 1:
 		return false
 	
@@ -359,7 +355,6 @@ func _sort_cells_left(cells_left : Array) -> void:
 func _compare_cells_left(a, b):
 	if a[1].get_entropy() == b[1].get_entropy():
 		return a[0].distance_to(_dimensions/2.0) < b[0].distance_to(_dimensions/2.0)
-	# TODO: Make this into true Shannon entropy
 	return a[1].get_entropy() < b[1].get_entropy()
 
 ## Configure if the solver will output debug messages and information.
@@ -455,7 +450,7 @@ func run() -> WFCGrid:
 				await Engine.get_main_loop().create_timer(_debug_delay).timeout
 			_sort_cells_left(cells_left)
 			var current_cell = cells_left.pop_front()
-			if current_cell[1].get_entropy() > 0:
+			if current_cell[1].has_possibilities():
 				_place_random_tile(terrain_tiles, prng, grid, current_cell[0])
 			else:
 				has_no_solution = true
