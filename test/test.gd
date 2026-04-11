@@ -3,11 +3,11 @@ extends Node2D
 
 @onready var tile_map_layer : TileMapLayer = $TileMapLayer
 
-var solver : TileWFCSolver
+var solver : TiledWFCSolver
 
 func _ready() -> void:
 	var input1 = load("res://test/assets/input1.tscn").instantiate()
-	solver = TileWFCSolver.new(load("res://test/assets/terrain.tres"), [input1])
+	solver = TiledWFCSolver.new(load("res://test/assets/terrain.tres"), [input1])
 	solver.set_seed(44)
 	solver.set_debug_mode(true)
 	solver.set_debug_delay(0.01)

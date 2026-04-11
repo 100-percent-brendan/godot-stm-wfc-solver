@@ -1,21 +1,21 @@
-class_name TileWFCGridSpace extends Node
-## A grid space within a [TileWFCGrid].
+class_name WFCCell extends Node
+## A grid cell within a [WFCGrid].
 ##
-## Each space stores part of a solution state, such as what tiles may appear
-## in a space, if the space has been populated, etc.
+## Each cell stores part of a solution state, such as what tiles may appear
+## in a cell, if the cell has been populated, etc.
 # TODO: Review this description
 
-## The status of this space.
+## The status of this cell.
 enum Status {
-	OPEN, ## The space is open for placing a tile in.
-	CLOSED ## The space has a tile in it.
+	OPEN, ## The cell is open for placing a tile in.
+	CLOSED ## The cell has a tile in it.
 }
 
 var _tile : Vector3i = Vector3i() ## The source ID followed by the atlas coordinates within the source.
-var _status : Status = Status.OPEN ## If the space is populated or not.
-var _possibilities : Array[Vector3i] = [] ## A collection of possible tiles for this space.
+var _status : Status = Status.OPEN ## If the cell is populated or not.
+var _possibilities : Array[Vector3i] = [] ## A collection of possible tiles for this cell.
 
-## Set space to contain tile.
+## Set cell to contain tile.
 ##
 ## The [param tile] is a source ID and tile index.
 func place_tile(tile : Vector3i) -> void:
@@ -29,8 +29,8 @@ func place_tile(tile : Vector3i) -> void:
 func get_tile() -> Vector3i:
 	return _tile
 
-## Reset space to open.
-func open_space() -> void:
+## Reset cell to open.
+func reset() -> void:
 	_tile = Vector3i()
 	_status = Status.OPEN
 
@@ -38,19 +38,19 @@ func open_space() -> void:
 func get_status() -> Status:
 	return _status
 
-## Add a possible tile this space could be occupied with.
+## Add a possible tile this cell could be occupied with.
 ##
 ## The [param tile] is a source ID and tile index.
 func add_possibility(tile : Vector3i):
 	_possibilities.push_back(Vector3i(tile))
 
-## Clear the possible tiles that could go into this space.
+## Clear the possible tiles that could go into this cell.
 func clear_possibilities():
 	_possibilities = []
 
-## Get the entropy of the space.
+## Get the entropy of the cell.
 ##
-## This represents the number of tiles that could occupy the space.
+## This represents the number of tiles that could occupy the cell.
 func get_entropy() -> int:
 	return _possibilities.size()
 

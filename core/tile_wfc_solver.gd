@@ -1,4 +1,4 @@
-class_name TileWFCSolver extends Node
+class_name TiledWFCSolver extends Node
 ## Simple tiled model wave function collapse (WFC) solver.
 ##
 ## This supports square tiles with edge and corner terrain matching.
@@ -125,22 +125,22 @@ func _process_input_maps(input_maps : Array[TileMapLayer]) -> void:
 				if !_neighbor_counts.has(unique_id):
 					_neighbor_counts[unique_id] = {"neighbors": {}}
 				
-				## Surrounding spaces are organized top, right, bottom, and then left.
-				var neighbor_spaces : Array = []
-				neighbor_spaces.push_back([
+				## Surrounding cells are organized top, right, bottom, and then left.
+				var neighbor_cells : Array = []
+				neighbor_cells.push_back([
 					Vector2i(cell.x, cell.y - 1), ComparisonDirection.BOTTOM_TO_TOP
 				])
-				neighbor_spaces.push_back([
+				neighbor_cells.push_back([
 					Vector2i(cell.x + 1, cell.y), ComparisonDirection.LEFT_TO_RIGHT
 				])
-				neighbor_spaces.push_back([
+				neighbor_cells.push_back([
 					Vector2i(cell.x, cell.y + 1), ComparisonDirection.TOP_TO_BOTTOM
 				])
-				neighbor_spaces.push_back([
+				neighbor_cells.push_back([
 					Vector2i(cell.x - 1, cell.y), ComparisonDirection.RIGHT_TO_LEFT
 				])
 				
-				for neighbor in neighbor_spaces:
+				for neighbor in neighbor_cells:
 					var neighbor_source_id = map.get_cell_source_id(neighbor[0])
 					var neighbor_atlas_coords = map.get_cell_atlas_coords(neighbor[0])
 					if neighbor_source_id == -1:
@@ -285,50 +285,50 @@ func _compare_terrain_tiles(
 	
 	return false
 
-## Update the terrain possibilities within a space.
+## Update the terrain possibilities within a cell.
 ##
 ## Requires a list of valid terrain tiles, the grid, and the coordinates of
-## which space is being updated.
-func _update_space_possibilities(terrain_tiles : Array[Vector3i], grid : TileWFCGrid, coords : Vector2i) -> void:
+## which cell is being updated.
+func _update_cell_possibilities(terrain_tiles : Array[Vector3i], grid : WFCGrid, coords : Vector2i) -> void:
 	if !terrain_tiles || !grid:
 		return
 	
-	var space := grid.get_space(coords.x, coords.y)
-	if !space:
+	var cell := grid.get_cell(coords.x, coords.y)
+	if !cell:
 		return
 	
-	if space.get_status() == TileWFCGridSpace.Status.CLOSED:
+	if cell.get_status() == WFCCell.Status.CLOSED:
 		return
 	
-	## Surrounding spaces are organized top, right, bottom, and then left.
-	## Spaces may be null, this will be treated as an empty tile for possibility selection.
-	var neighbor_spaces : Array = []
-	neighbor_spaces.push_back([
-		grid.get_space(coords.x, coords.y - 1),
+	## Surrounding cells are organized top, right, bottom, and then left.
+	## Cells may be null, this will be treated as an empty tile for possibility selection.
+	var neighbor_cells : Array = []
+	neighbor_cells.push_back([
+		grid.get_cell(coords.x, coords.y - 1),
 		ComparisonDirection.BOTTOM_TO_TOP
 	])
-	neighbor_spaces.push_back([
-		grid.get_space(coords.x + 1, coords.y),
+	neighbor_cells.push_back([
+		grid.get_cell(coords.x + 1, coords.y),
 		ComparisonDirection.LEFT_TO_RIGHT
 	])
-	neighbor_spaces.push_back([
-		grid.get_space(coords.x, coords.y + 1),
+	neighbor_cells.push_back([
+		grid.get_cell(coords.x, coords.y + 1),
 		ComparisonDirection.TOP_TO_BOTTOM
 	])
-	neighbor_spaces.push_back([
-		grid.get_space(coords.x - 1, coords.y),
+	neighbor_cells.push_back([
+		grid.get_cell(coords.x - 1, coords.y),
 		ComparisonDirection.RIGHT_TO_LEFT
 	])
 	
 	var combined_possibilities : Array[Vector3i] = terrain_tiles.duplicate()
 	var possibility_spaces : Array[Array] = []
 	
-	for neighbor_space in neighbor_spaces:
-		var neighbor : TileWFCGridSpace = neighbor_space[0]
-		var direction : ComparisonDirection = neighbor_space[1]
-		## Don't both making a neighbor possibility space if the space is open or non-existent.
+	for neighbor_cell in neighbor_cells:
+		var neighbor : WFCCell = neighbor_cell[0]
+		var direction : ComparisonDirection = neighbor_cell[1]
+		## Don't both making a neighbor possibility space if the cell is open or non-existent.
 		## All possibilites are valid.
-		if !neighbor || neighbor.get_status() == TileWFCGridSpace.Status.OPEN:
+		if !neighbor || neighbor.get_status() == WFCCell.Status.OPEN:
 			continue
 		
 		# TODO: Optimize: Move building this to a central step and tile-specific index
@@ -341,72 +341,72 @@ func _update_space_possibilities(terrain_tiles : Array[Vector3i], grid : TileWFC
 	for possibilities in possibility_spaces:
 		combined_possibilities = _get_vector3i_array_intersection(combined_possibilities, possibilities)
 	
-	space.clear_possibilities()
+	cell.clear_possibilities()
 	for tile in combined_possibilities:
-		space.add_possibility(tile)
+		cell.add_possibility(tile)
 
-## Place or remove a tile from a space.
+## Place or remove a tile from a cell.
 ##
-## This updates the space possibilities of this tile and all surrounding tiles,
+## This updates the cell possibilities of this tile and all surrounding tiles,
 ## if relevant.
 ## Requires a list of valid terrain tiles, the grid, the coordinates of
-## which space is being changed, and the tile its being changed to (or the remove flag).
+## which cell is being changed, and the tile its being changed to (or the remove flag).
 func _place_tile(
-	terrain_tiles : Array[Vector3i], grid : TileWFCGrid, coords : Vector2i,
+	terrain_tiles : Array[Vector3i], grid : WFCGrid, coords : Vector2i,
 	tile : Vector3i, remove_tile : bool = false
 ) -> void:
 	if !terrain_tiles || !grid:
 		return
 	
-	var space := grid.get_space(coords.x, coords.y)
-	if !space:
+	var cell : WFCCell = grid.get_cell(coords.x, coords.y)
+	if !cell:
 		return
 	
 	if remove_tile:
-		space.open_space()
-		_update_space_possibilities(terrain_tiles, grid, coords)
+		cell.open()
+		_update_cell_possibilities(terrain_tiles, grid, coords)
 		if _debug_mode:
 			tile_removed.emit(coords)
 	else:
-		space.place_tile(tile)
+		cell.place_tile(tile)
 		if _debug_mode:
 			var source := _terrain_tile_set.get_source(tile.x)
 			if source is TileSetAtlasSource:
 				tile_placed.emit(coords, tile.x, Vector2i(tile.y, tile.z))
 	
-	## Surrounding spaces are organized top, right, bottom, and then left.
+	## Surrounding cells are organized top, right, bottom, and then left.
 	var neighbor_coords : Array[Vector2i] = []
 	neighbor_coords.push_back(Vector2i(coords.x, coords.y - 1))
 	neighbor_coords.push_back(Vector2i(coords.x + 1, coords.y))
 	neighbor_coords.push_back(Vector2i(coords.x, coords.y + 1))
 	neighbor_coords.push_back(Vector2i(coords.x - 1, coords.y))
 	
-	## Update all the surrounding space possibilities
+	## Update all the surrounding cell possibilities
 	for neighbor in neighbor_coords:
-		## This will ignore null spaces
-		_update_space_possibilities(terrain_tiles, grid, neighbor)
+		## This will ignore null cells
+		_update_cell_possibilities(terrain_tiles, grid, neighbor)
 
-## Place a random tile in a space.
+## Place a random tile in a cell.
 ##
-## This updates the space possibilities of this tile and all surrounding tiles,
+## This updates the cell possibilities of this tile and all surrounding tiles,
 ## if relevant.
 ## Requires a list of valid terrain tiles, the pseudorandom number generator,
-## the grid, and the coordinates of which space is being changed.
+## the grid, and the coordinates of which cell is being changed.
 ##
 ## If was able to roll to place a tile, will return true, otherwise false.
 func _place_random_tile(
-	terrain_tiles : Array[Vector3i], prng : RandomNumberGenerator, grid : TileWFCGrid, coords : Vector2i
+	terrain_tiles : Array[Vector3i], prng : RandomNumberGenerator, grid : WFCGrid, coords : Vector2i
 ) -> bool:
 	# TODO: Upgrade this to take into account tile probabilities
 	
 	if terrain_tiles.size() < 1:
 		return false
 	
-	var space : TileWFCGridSpace = grid.get_space(coords.x, coords.y)
-	if !space:
+	var cell : WFCCell = grid.get_cell(coords.x, coords.y)
+	if !cell:
 		return false
 	
-	var possibilities := space.get_possibilities()
+	var possibilities := cell.get_possibilities()
 	
 	if possibilities.size() < 1:
 		return false
@@ -440,22 +440,22 @@ func _place_random_tile(
 	
 	return false
 
-## Remove a tile from a space.
+## Remove a tile from a cell.
 ##
-## This updates the space possibilities of this tile and all surrounding tiles,
+## This updates the cell possibilities of this tile and all surrounding tiles,
 ## if relevant.
 ## Requires a list of valid terrain tiles, the grid, and the coordinates of
-## the space where the tile is being removed.
+## the cell where the tile is being removed.
 func _remove_tile(
-	terrain_tiles : Array[Vector3i], grid : TileWFCGrid, coords : Vector2i
+	terrain_tiles : Array[Vector3i], grid : WFCGrid, coords : Vector2i
 ) -> void:
 	_place_tile(terrain_tiles, grid, coords, Vector3i(), true)
 
 ## Initialize grid.
 ##
-## Initialize the [TileWFCGrid] with possibilities.
+## Initialize the [WFCGrid] with possibilities.
 ## Requires a list of valid terrain tiles and the grid.
-func _init_grid(terrain_tiles : Array[Vector3i], grid : TileWFCGrid) -> void:
+func _init_grid(terrain_tiles : Array[Vector3i], grid : WFCGrid) -> void:
 	if !terrain_tiles || terrain_tiles.is_empty():
 		_print_debug_message("No terrain tiles available.", DebugSeverity.WARNING)
 		return
@@ -467,25 +467,25 @@ func _init_grid(terrain_tiles : Array[Vector3i], grid : TileWFCGrid) -> void:
 	var dimensions = grid.get_dimensions()
 	for y in range(dimensions.y):
 		for x in range(dimensions.x):
-			_update_space_possibilities(terrain_tiles, grid, Vector2i(x, y))
+			_update_cell_possibilities(terrain_tiles, grid, Vector2i(x, y))
 
-## Sort spaces left.
+## Sort cells left.
 ##
-## This is a helper function that sorts the spaces left array first by entropy
-## (to choose the lowest entropy space) and then by distance from the center.
+## This is a helper function that sorts the cells left array first by entropy
+## (to choose the lowest entropy cell) and then by distance from the center.
 ##
 ## The general idea is that by starting in the center, and working on the
-## lowest entropy spaces, the algorithm can: stop as soon as it detects an
+## lowest entropy cells, the algorithm can: stop as soon as it detects an
 ## unsolvable state and avoid solving edge pieces first, which are more likely to
 ## have more options near the end.
 ##
-## This expects an Array[Array] which each array contains a Vector2i (space
-## coordinates) and a [TileWFCSpace].
-func _sort_spaces_left(spaces_left : Array) -> void:
-	spaces_left.sort_custom(_compare_spaces_left)
+## This expects an Array[Array] which each array contains a Vector2i (cell
+## coordinates) and a [WFCCell].
+func _sort_cells_left(cells_left : Array) -> void:
+	cells_left.sort_custom(_compare_cells_left)
 
-## Compare spaces for the custom sort in [code]_sort_spaces_left()[/code].
-func _compare_spaces_left(a, b):
+## Compare cells for the custom sort in [code]_sort_cells_left()[/code].
+func _compare_cells_left(a, b):
 	if a[1].get_entropy() == b[1].get_entropy():
 		return a[0].distance_to(_dimensions/2.0) < b[0].distance_to(_dimensions/2.0)
 	# TODO: Make this into true Shannon entropy
@@ -505,7 +505,7 @@ func set_seed(prng_seed : int) -> void:
 
 ## Set the dimensions of the scene grid.
 ##
-## Each space represents a tile unit. Must be larger than the minimum size in
+## Each cell represents a tile unit. Must be larger than the minimum size in
 ## each dimension.
 func set_dimensions(width : int, height : int):
 	_dimensions = Vector2i(maxi(width, MIN_SIZE), maxi(height, MIN_SIZE))
@@ -542,16 +542,16 @@ func can_run() -> bool:
 # TODO: This probably won't use tile map layers, update the description below.
 ## Run the tile solver.
 ##
-## Returns the [TileWFCGrid] with or without a solution. Always check the grid
+## Returns the [WFCGrid] with or without a solution. Always check the grid
 ## status to ensure there were no errors.
-func run() -> TileWFCGrid:
+func run() -> WFCGrid:
 	if !can_run():
 		_print_debug_message(
 			"The solver could not start due to a failed pre-check.",
 			DebugSeverity.ERROR
 		)
-		var error_grid := TileWFCGrid.new(0, 0)
-		error_grid.set_failed(TileWFCGrid.FailureCause.ERROR)
+		var error_grid := WFCGrid.new(0, 0)
+		error_grid.set_failed(WFCGrid.FailureCause.ERROR)
 		return error_grid
 	
 	_print_debug_message(
@@ -566,26 +566,26 @@ func run() -> TileWFCGrid:
 	var retry : int = 0 ## The current retry
 	
 	var terrain_tiles := _get_valid_terrain_tiles()
-	var grid := TileWFCGrid.new(_dimensions.x, _dimensions.y)
+	var grid := WFCGrid.new(_dimensions.x, _dimensions.y)
 	_init_grid(terrain_tiles, grid)
 	
 	while true:
 		var has_no_solution : bool = false ## If the current solution state is unsolvable
 		
-		## Spaces, partnered with their coordinates
-		var spaces_left : Array = []
+		## Cells, partnered with their coordinates
+		var cells_left : Array = []
 		var grid_dims := grid.get_dimensions()
 		for y in grid_dims.y:
 			for x in grid_dims.x:
-				spaces_left.push_back([Vector2i(x, y), grid.get_space(x, y)])
+				cells_left.push_back([Vector2i(x, y), grid.get_cell(x, y)])
 		
-		while spaces_left.size() > 0:
+		while cells_left.size() > 0:
 			if _debug_mode && _debug_delay > 0.0:
 				await Engine.get_main_loop().create_timer(_debug_delay).timeout
-			_sort_spaces_left(spaces_left)
-			var current_space = spaces_left.pop_front()
-			if current_space[1].get_entropy() > 0:
-				_place_random_tile(terrain_tiles, prng, grid, current_space[0])
+			_sort_cells_left(cells_left)
+			var current_cell = cells_left.pop_front()
+			if current_cell[1].get_entropy() > 0:
+				_place_random_tile(terrain_tiles, prng, grid, current_cell[0])
 			else:
 				has_no_solution = true
 				break
@@ -598,13 +598,13 @@ func run() -> TileWFCGrid:
 				"No solution found. Restarting on retry " + str(retry) + ".",
 				DebugSeverity.INFORMATION
 			)
-			grid = TileWFCGrid.new(_dimensions.x, _dimensions.y)
+			grid = WFCGrid.new(_dimensions.x, _dimensions.y)
 			_init_grid(terrain_tiles, grid)
 			if _debug_mode:
 				grid_reset.emit()
 			continue
 		elif has_no_solution:
-			grid.set_failed(TileWFCGrid.FailureCause.NO_SOLUTION)
+			grid.set_failed(WFCGrid.FailureCause.NO_SOLUTION)
 			_print_debug_message(
 				"No solution found. Retries exhausted.",
 				DebugSeverity.INFORMATION

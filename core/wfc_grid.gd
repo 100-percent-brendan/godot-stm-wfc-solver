@@ -1,7 +1,7 @@
-class_name TileWFCGrid extends Node
+class_name WFCGrid extends Node
 ## A grid used when solving, storing and returning the solution in the [TileWFCSolver].
 ##
-## Each space in the grid represents a slot where a square tile can be placed.
+## Each cell in the grid represents a slot where a square tile can be placed.
 ## Where a solution is found, this can be used to populate a [TileMapLayer]
 ## or other construct.
 # TODO: Review this description
@@ -23,7 +23,7 @@ enum FailureCause {
 
 var _width : int = 0 ## The width of the grid.
 var _height : int = 0 ## The height of the grid.
-var _grid : Array[TileWFCGridSpace] = [] ## The raw grid. This will wrap around based on width.
+var _grid : Array[WFCCell] = [] ## The raw grid. This will wrap around based on width.
 var _status : Status = Status.UNINITIALIZED ## The status of the grid.
 var _failure_cause : FailureCause = FailureCause.NONE ## The cause of a failure.
 
@@ -38,7 +38,7 @@ func _init_grid(width : int, height : int):
 	_height = maxi(height, 0)
 	for w in range(_width):
 		for h in range(_height):
-			_grid.push_back(TileWFCGridSpace.new())
+			_grid.push_back(WFCCell.new())
 
 ## Get the width and height of the grid.
 func get_dimensions() -> Vector2i:
@@ -67,10 +67,10 @@ func set_solved() -> void:
 	
 	_status = Status.SOLVED
 
-## Get a space at a specific position from the grid.
+## Get a cell at a specific position from the grid.
 ##
-## The space may then be updated.
-func get_space(x : int, y : int) -> TileWFCGridSpace:
+## The cell may then be updated.
+func get_cell(x : int, y : int) -> WFCCell:
 	if x >= _width || y >= _height || x < 0 || y < 0:
 		return null
 	
