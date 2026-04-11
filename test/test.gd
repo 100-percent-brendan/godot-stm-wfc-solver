@@ -10,7 +10,7 @@ func _ready() -> void:
 	solver = TiledWFCSolver.new(load("res://test/assets/terrain.tres"), [input1])
 	solver.set_seed(44)
 	solver.set_debug_mode(true)
-	solver.set_debug_delay(0.01)
+	solver.set_debug_delay(0.0001)
 	solver.set_dimensions(30, 20)
 	solver.tile_placed.connect(_on_tile_placed)
 	solver.tile_removed.connect(_on_tile_removed)

@@ -89,16 +89,16 @@ func _process_input_maps(input_maps : Array[TileMapLayer]) -> void:
 				## Surrounding cells are organized top, right, bottom, and then left.
 				var neighbor_cells : Array = []
 				neighbor_cells.push_back([
-					Vector2i(cell.x, cell.y - 1), ComparisonDirection.BOTTOM_TO_TOP
+					Vector2i(cell.x, cell.y - 1), ComparisonDirection.TOP_TO_BOTTOM
 				])
 				neighbor_cells.push_back([
-					Vector2i(cell.x + 1, cell.y), ComparisonDirection.LEFT_TO_RIGHT
+					Vector2i(cell.x + 1, cell.y), ComparisonDirection.RIGHT_TO_LEFT
 				])
 				neighbor_cells.push_back([
-					Vector2i(cell.x, cell.y + 1), ComparisonDirection.TOP_TO_BOTTOM
+					Vector2i(cell.x, cell.y + 1), ComparisonDirection.BOTTOM_TO_TOP
 				])
 				neighbor_cells.push_back([
-					Vector2i(cell.x - 1, cell.y), ComparisonDirection.RIGHT_TO_LEFT
+					Vector2i(cell.x - 1, cell.y), ComparisonDirection.LEFT_TO_RIGHT
 				])
 				
 				for neighbor in neighbor_cells:
