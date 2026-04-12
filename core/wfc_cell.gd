@@ -3,7 +3,6 @@ class_name WFCCell extends Node
 ##
 ## Each cell stores part of a solution state, such as what tiles may appear
 ## in a cell, if the cell has been populated, etc.
-# TODO: Review this description
 
 ## The status of this cell.
 enum Status {
@@ -17,7 +16,7 @@ var _possibilities : Dictionary[Vector3i, float] = {} ## A collection of possibl
 var _total_weight : float = 0.0 ## The total weight of all possible tiles.
 var _entropy : float = 0.0 ## The Shannon entropy.
 
-## Calculate the entropy.
+## Calculate the Shannon entropy.
 func _calculate_entropy() -> void:
 	if _status == Status.CLOSED || !has_possibilities():
 		_entropy = 0.0
@@ -30,7 +29,7 @@ func _calculate_entropy() -> void:
 	
 	_entropy = entropy
 
-## Set cell to contain tile.
+## Set cell to contain a tile.
 ##
 ## The [param tile] is a source ID and atlas coordinates.
 func place_tile(tile : Vector3i) -> void:
@@ -55,9 +54,10 @@ func get_status() -> Status:
 
 ## Set possibilities.
 ##
-## This accepts a [Dictionary[Vector3i, float]] with the tile as the index (represented as a
-## source ID and atlas coordinates) and the value holding probability weights. This will store
-## a reference to the object.
+## This accepts a [Dictionary[Vector3i, float]] with the key being the tile (represented as a
+## source ID and atlas coordinates) and the value holding probability weights. For efficiency,
+## this will store a reference to the [Dictionary] object. If this is not desired,
+## duplicate the object before passing it in.
 func set_possibilites(possibilities : Dictionary[Vector3i, float]) -> void:
 	_possibilities = possibilities
 	_total_weight = 0.0
@@ -80,12 +80,12 @@ func clear_possibilities() -> void:
 
 ## Get the entropy of the cell.
 ##
-## This represents the number of tiles that could occupy the cell.
-func get_entropy() -> int:
+## This is the Shannon entropy of all tiles that could occupy the cell.
+func get_entropy() -> float:
 	return _entropy
 
-## Get the array of possibilities.
+## Get the [Dictionary] of possibilities.
 ##
-## This is a direct reference, do not modify it.
+## This is a direct object reference, do not modify it.
 func get_possibilities() -> Dictionary[Vector3i, float]:
 	return _possibilities

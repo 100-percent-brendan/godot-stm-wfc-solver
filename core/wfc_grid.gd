@@ -1,10 +1,9 @@
 class_name WFCGrid extends Node
-## A grid used when solving, storing and returning the solution in the [TileWFCSolver].
+## A grid used when solving, storing and returning data from the [TileWFCSolver].
 ##
 ## Each cell in the grid represents a slot where a square tile can be placed.
 ## Where a solution is found, this can be used to populate a [TileMapLayer]
 ## or other construct.
-# TODO: Review this description
 
 ## The status of a grid.
 enum Status {
