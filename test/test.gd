@@ -1,7 +1,8 @@
 extends Node2D
 ## A simple test of the [TiledWFCSolver].
 ##
-## This uses a static seed to aid in debugging the solver.
+## This uses an incrementing seed to aid in debugging the solver, as well as
+## demonstration.
 
 @onready var tile_map_layer : TileMapLayer = $TileMapLayer ## A Tile Map Layer to place tiles within.
 
@@ -13,7 +14,8 @@ func _ready() -> void:
 		tile_map_layer.clear()
 		
 		var input1 = load("res://test/assets/input1.tscn").instantiate()
-		solver = TiledWFCSolver.new(load("res://test/assets/terrain.tres"), [input1])
+		var input2 = load("res://test/assets/input2.tscn").instantiate()
+		solver = TiledWFCSolver.new(load("res://test/assets/terrain.tres"), [input1, input2])
 		solver.set_seed(i)
 		solver.set_debug_mode(true)
 		solver.set_debug_delay(0.002)
@@ -24,8 +26,7 @@ func _ready() -> void:
 		var _grid := await solver.run()
 		
 		# Wait 5 seconds after success
-		await get_tree().create_timer(5.0).timeout
-		# TODO: Setup code to transpose solution to a tile map layer
+		await get_tree().create_timer(1.0).timeout
 
 ## When a tile is placed in the solver, place it on the test [TileMapLayer].
 func _on_tile_placed(coords : Vector2i, source_id : int, atlas_coords : Vector2i) -> void:

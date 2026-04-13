@@ -230,14 +230,12 @@ func _place_tile(
 	if remove_tile:
 		cell.reset()
 		_update_cell_possibilities(terrain_tiles, grid, coords)
-		if _debug_mode:
-			tile_removed.emit(coords)
+		tile_removed.emit(coords)
 	else:
 		cell.place_tile(tile)
-		if _debug_mode:
-			var source := _terrain_tile_set.get_source(tile.x)
-			if source is TileSetAtlasSource:
-				tile_placed.emit(coords, tile.x, Vector2i(tile.y, tile.z))
+		var source := _terrain_tile_set.get_source(tile.x)
+		if source is TileSetAtlasSource:
+			tile_placed.emit(coords, tile.x, Vector2i(tile.y, tile.z))
 	
 	## Surrounding cells are organized top, right, bottom, and then left.
 	var neighbor_coords : Array[Vector2i] = []
@@ -383,6 +381,8 @@ func set_debug_mode(debug_mode : bool) -> void:
 	_debug_mode = debug_mode
 
 ## Set the amount of time between major actions, such as tile placements, when debugging.
+##
+## The delay will likely sync to the nearest physics cycle above it in time.
 func set_debug_delay(delay : float) -> void:
 	_debug_delay = max(delay, 0.0)
 
@@ -459,6 +459,7 @@ func run() -> WFCGrid:
 	var start_time : int = Time.get_ticks_msec() ## When the process started
 	var retry : int = 0 ## The current retry
 	var local_reset : int = 0 ## How many local resets have been used; a local reset clears and requeues all neighbors cells
+	var last_defer : float = Time.get_ticks_msec() ## Total time since last defer.
 	
 	var terrain_tiles := _get_valid_terrain_tiles()
 	var grid := WFCGrid.new(_dimensions.x, _dimensions.y)
@@ -475,10 +476,14 @@ func run() -> WFCGrid:
 				cells_left.push_back([Vector2i(x, y), grid.get_cell(x, y)])
 		
 		while cells_left.size() > 0:
-			# Apply debugging delay
 			if _debug_mode && _debug_delay > 0.0:
+				# Apply debugging delay
 				await Engine.get_main_loop().create_timer(_debug_delay).timeout
-			# TODO: Add smart deferred main loop processing here to avoid freezing
+			else:
+				# Defer to the main loop every physics tick to prevent hanging
+				if (Time.get_ticks_msec() - last_defer) > (1000.0 / Engine.physics_ticks_per_second):
+					last_defer = Time.get_ticks_msec()
+					await Engine.get_main_loop().process_frame
 			
 			# Sort cells to find lowest entrop
 			_sort_cells_left(cells_left)
