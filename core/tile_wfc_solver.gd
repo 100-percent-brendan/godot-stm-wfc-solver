@@ -44,8 +44,10 @@ var _debug_delay : float = 0.0 ## Delay between tile placements and other major 
 var _seed : int = 0 ## The seed used in the pseudorandom number generator (PRNG).
 var _dimensions : Vector2i = Vector2i(MIN_SIZE, MIN_SIZE) ## The dimensions of the output grid.
 var _max_retries : int = 100 ## The maximum number of retry attempts.
+var _max_local_resets : int = 100 ## The maximum number of local resets.
 var _terrain_tile_set : TileSet ## The tileset for the terrain.
 var _neighbor_counts : Dictionary ## The neighbor counts used for adjacency constraints and probabilities.
+# TODO: Move terrain tiles here
 
 ## Initialize the wave function collapse solver.
 ##
@@ -226,7 +228,7 @@ func _place_tile(
 		return
 	
 	if remove_tile:
-		cell.open()
+		cell.reset()
 		_update_cell_possibilities(terrain_tiles, grid, coords)
 		if _debug_mode:
 			tile_removed.emit(coords)
@@ -304,6 +306,39 @@ func _remove_tile(
 ) -> void:
 	_place_tile(terrain_tiles, grid, coords, Vector3i(), true)
 
+## Remove tiles from cells in local neighborhood.
+##
+## Remove the tiles from all surrounding cells in the local neighborhood.
+## The neighborhood is defined as by being within a certain distance of the center tile
+## in either or both X or Y.
+##
+## Returns any cells that had tiles removed as [coordinates, WFCCell].
+func _remove_neighbor_tiles(
+	terrain_tiles : Array[Vector3i], grid : WFCGrid, coords : Vector2i, distance : int = 1
+) -> Array[Array]:
+	# Distance must be at least 1
+	distance = maxi(distance, 1)
+	
+	# Surrounding cells are organized top, right, bottom, and then left.
+	var neighbors : Array[Vector2i] = []
+	for x in range(-distance, distance + 1):
+		for y in range(-distance, distance + 1):
+			if x != 0 || y != 0:
+				neighbors.push_back(Vector2i(coords.x + x, coords.y + y))
+	
+	var neighbors_removed : Array[Array] = []
+	
+	# Remove neighbors, where they exist
+	for neighbor_coords : Vector2i in neighbors:
+		var cell = grid.get_cell(neighbor_coords.x, neighbor_coords.y)
+		# Step over open or non-existent cells
+		if !cell || cell.get_status() == WFCCell.Status.OPEN:
+			continue
+		_remove_tile(terrain_tiles, grid, neighbor_coords)
+		neighbors_removed.push_back([neighbor_coords, cell])
+	
+	return neighbors_removed
+
 ## Initialize grid.
 ##
 ## Initialize the [WFCGrid] with possibilities.
@@ -368,6 +403,12 @@ func set_dimensions(width : int, height : int):
 func set_max_retries(max_retries : int) -> void:
 	_max_retries = maxi(max_retries, 1)
 
+## Set the maximum number of local retries before the solver gives up.
+##
+## This must be zero or above.
+func set_max_local_resets(max_local_resets : int) -> void:
+	_max_local_resets = maxi(max_local_resets, 1)
+
 ## Check if the solver is ready to be run.
 ##
 ## This contains safety checks for starting the solver.
@@ -388,6 +429,8 @@ func can_run() -> bool:
 	if !_terrain_tile_set:
 		_print_debug_message("Terrain tile set must be supplied.", DebugSeverity.ERROR)
 		check_result = false
+	
+	# TODO: Add checks for available tiles
 	
 	return check_result
 
@@ -415,6 +458,7 @@ func run() -> WFCGrid:
 	
 	var start_time : int = Time.get_ticks_msec() ## When the process started
 	var retry : int = 0 ## The current retry
+	var local_reset : int = 0 ## How many local resets have been used; a local reset clears and requeues all neighbors cells
 	
 	var terrain_tiles := _get_valid_terrain_tiles()
 	var grid := WFCGrid.new(_dimensions.x, _dimensions.y)
@@ -424,7 +468,7 @@ func run() -> WFCGrid:
 		var has_no_solution : bool = false ## If the current solution state is unsolvable.
 		
 		# Cells, partnered with their coordinates.
-		var cells_left : Array = []
+		var cells_left : Array[Array] = []
 		var grid_dims := grid.get_dimensions()
 		for y in grid_dims.y:
 			for x in grid_dims.x:
@@ -444,10 +488,19 @@ func run() -> WFCGrid:
 				# If there are possible tiles for a cell, place a tile
 				_place_random_tile(terrain_tiles, prng, grid, current_cell[0])
 			else:
-				# If no solution state found, break
-				# TODO: Add backtrack-like behavior here
-				has_no_solution = true
-				break
+				# No solution state triggered
+				if local_reset < _max_local_resets:
+					# If there are local resets remaining, reset the local neighborhood
+					# Requeue any cleared cells, and the current cell
+					var cleared_cells := _remove_neighbor_tiles(terrain_tiles, grid, current_cell[0], 2)
+					for cleared_cell in cleared_cells:
+						cells_left.push_back(cleared_cell)
+					cells_left.push_back(current_cell)
+					local_reset += 1
+				else:
+					# If no solution state found, break
+					has_no_solution = true
+					break
 		
 		# On no solution, restart and retry if there are retries remaining
 		if has_no_solution && retry < _max_retries:
@@ -460,6 +513,7 @@ func run() -> WFCGrid:
 			)
 			grid = WFCGrid.new(_dimensions.x, _dimensions.y)
 			_init_grid(terrain_tiles, grid)
+			local_reset = 0
 			if _debug_mode:
 				grid_reset.emit()
 			continue
