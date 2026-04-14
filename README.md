@@ -18,7 +18,7 @@ In this context, the wave function collapse solver is used to generate a grid of
   - If no solution can be found and there are retries remaining, empty the grid and restart the process from grid initialization, otherwise fail
 
 ## Running Project
-To run this project from the Godot editor, ensure you have [Godot 4.5 or later](https://godotengine.org/), then import the project from within the loader. You can then Run Project from the play button in the upper-right of the editor.
+To run this project from the Godot editor, ensure you have [Godot 4.5 or later](https://godotengine.org/), then import the project from within Godot. You can then Run Project from the play button in the upper-right of the editor.
 
 ## Goals
 My goals with this project were two-fold:
