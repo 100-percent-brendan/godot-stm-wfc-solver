@@ -14,7 +14,7 @@ In this context, the wave function collapse solver is used to generate a grid of
   - Draw the grid cell with the lowest [Shannon entropy](https://en.wikipedia.org/wiki/Entropy_(information_theory)) or, on conflict, the one that is closest to the center
   - Populate that grid cell with a random tile from its valid possibilities; weights are used to determine probabilities; where two neighbors allow different weights for a valid tile, the lower weight of the two is used
   - Propogate the change to its neighbor cells, so that they are adjusted to only allow tiles which are valid when next to the added tile
-  - If a cell has no valid tiles and there are valid "neighborhood resets" remaining, clear a 5x5 area around the cell and reiterate
+  - If a cell has no valid tiles and there are valid "neighborhood resets" remaining, clear a 5x5 area around the cell, propogate changes, and reiterate
   - If no solution can be found and there are retries remaining, empty the grid and restart the process from grid initialization, otherwise fail
 
 ## Animation
