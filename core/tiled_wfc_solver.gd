@@ -422,7 +422,13 @@ func can_run() -> bool:
 		_print_debug_message("Tile set must be supplied.", DebugSeverity.ERROR)
 		check_result = false
 	
-	# TODO: Add checks for available tiles
+	if !_valid_tiles:
+		_print_debug_message("No valid tiles found.", DebugSeverity.ERROR)
+		check_result = false
+	
+	if !_neighbor_counts || _neighbor_counts.is_empty():
+		_print_debug_message("Neighbor tiles data structure does not have meaningful items.", DebugSeverity.ERROR)
+		check_result = false
 	
 	return check_result
 
