@@ -38,28 +38,26 @@ enum ComparisonDirection {
 
 const MIN_SIZE : int = 6 ## The minimum size of the output grid in each dimension.
 
-# TODO: Consider adding backtracks
 var _debug_mode : bool = false ## Output debug messages and information.
 var _debug_delay : float = 0.0 ## Delay between tile placements and other major actions.
 var _seed : int = 0 ## The seed used in the pseudorandom number generator (PRNG).
 var _dimensions : Vector2i = Vector2i(MIN_SIZE, MIN_SIZE) ## The dimensions of the output grid.
 var _max_retries : int = 100 ## The maximum number of retry attempts.
 var _max_local_resets : int = 100 ## The maximum number of local resets.
-var _terrain_tile_set : TileSet ## The tileset for the terrain.
+var _tile_set : TileSet ## The tileset.
 var _neighbor_counts : Dictionary ## The neighbor counts used for adjacency constraints and probabilities.
-# TODO: Move terrain tiles here
+var _valid_tiles : Array[Vector3i] ## A list of all valid tiles from the tile set.
 
 ## Initialize the wave function collapse solver.
 ##
-## The [param tile_set] is expected to have a single terrain layer, and for all tiles
-## to be one-tile-by-one-tile.
+## The [param tile_set] is expected for all tiles to be one-tile-by-one-tile in size.
 ##
 ## The [param input_maps] are expected to contain examples of tile maps. These
 ## are used to configure adjacency constraints and probabilities.
 func _init(tile_set : TileSet, input_maps : Array[TileMapLayer]) -> void:
-	_terrain_tile_set = tile_set
-	# TODO: Verify terrain elements here
+	_tile_set = tile_set
 	_process_input_maps(input_maps)
+	_valid_tiles = _get_valid_tiles()
 
 ## Process the input maps.
 ##
@@ -73,7 +71,7 @@ func _process_input_maps(input_maps : Array[TileMapLayer]) -> void:
 	# Ignore empty cells.
 	for map in input_maps:
 		# Ensure tile set matches.
-		if !map.tile_set || map.tile_set != _terrain_tile_set:
+		if !map.tile_set || map.tile_set != _tile_set:
 			continue
 		
 		for cell in map.get_used_cells():
@@ -130,11 +128,11 @@ func _print_debug_message(message: String, severity : DebugSeverity) -> void:
 			_:
 				print(message)
 
-## Get all valid possible tiles from the terrain tile set.
+## Get all valid possible tiles from the tile set.
 ##
 ## Returns an array containing the source ID and atlas coordinates as a [Vector3i].
-func _get_valid_terrain_tiles() -> Array[Vector3i]:
-	if !_terrain_tile_set:
+func _get_valid_tiles() -> Array[Vector3i]:
+	if !_tile_set:
 		return []
 	
 	var valid_tiles : Array[Vector3i] = []
@@ -145,10 +143,9 @@ func _get_valid_terrain_tiles() -> Array[Vector3i]:
 
 ## Update the terrain possibilities within a cell.
 ##
-## Requires a list of valid terrain tiles, the grid, and the coordinates of
-## the cell being updated.
-func _update_cell_possibilities(terrain_tiles : Array[Vector3i], grid : WFCGrid, coords : Vector2i) -> void:
-	if !terrain_tiles || !grid:
+## Requires the grid and the coordinates of the cell being updated.
+func _update_cell_possibilities(grid : WFCGrid, coords : Vector2i) -> void:
+	if !_valid_tiles || !grid:
 		return
 	
 	var cell : WFCCell = grid.get_cell(coords.x, coords.y)
@@ -180,7 +177,7 @@ func _update_cell_possibilities(terrain_tiles : Array[Vector3i], grid : WFCGrid,
 	
 	# Start with base weights and widdle down the possibilities.
 	var possibilities : Dictionary[Vector3i, float] = {}
-	for tile : Vector3i in terrain_tiles:
+	for tile : Vector3i in _valid_tiles:
 		if _neighbor_counts.has(tile) && _neighbor_counts[tile].count > 0:
 			possibilities[tile] = _neighbor_counts[tile].count
 	
@@ -195,7 +192,7 @@ func _update_cell_possibilities(terrain_tiles : Array[Vector3i], grid : WFCGrid,
 		if !_neighbor_counts[neighbor_tile] || !_neighbor_counts[neighbor_tile].neighbors.has(direction):
 			continue
 		
-		for tile in terrain_tiles:
+		for tile in _valid_tiles:
 			if _neighbor_counts[neighbor_tile].neighbors[direction].has(tile):
 				if possibilities.has(tile):
 					# Choose the most constrained weight, either the existing weight or the one provided by the neighbor
@@ -211,16 +208,15 @@ func _update_cell_possibilities(terrain_tiles : Array[Vector3i], grid : WFCGrid,
 ##
 ## This updates the cell possibilities of this tile and all surrounding tiles,
 ## if relevant.
-## Requires a list of valid terrain tiles, the grid, the coordinates of
-## which cell is being changed, and the tile its being changed to.
+## Requires the grid, the coordinates of which cell is being changed, and the tile its being changed to.
 ##
 ## Alternatively, if the remove flag is supplied, this will remove the tile
 ## at a given set of grid coordinates.
 func _place_tile(
-	terrain_tiles : Array[Vector3i], grid : WFCGrid, coords : Vector2i,
+	grid : WFCGrid, coords : Vector2i,
 	tile : Vector3i, remove_tile : bool = false
 ) -> void:
-	if !terrain_tiles || !grid:
+	if !grid:
 		return
 	
 	var cell : WFCCell = grid.get_cell(coords.x, coords.y)
@@ -229,11 +225,11 @@ func _place_tile(
 	
 	if remove_tile:
 		cell.reset()
-		_update_cell_possibilities(terrain_tiles, grid, coords)
+		_update_cell_possibilities(grid, coords)
 		tile_removed.emit(coords)
 	else:
 		cell.place_tile(tile)
-		var source := _terrain_tile_set.get_source(tile.x)
+		var source := _tile_set.get_source(tile.x)
 		if source is TileSetAtlasSource:
 			tile_placed.emit(coords, tile.x, Vector2i(tile.y, tile.z))
 	
@@ -247,23 +243,20 @@ func _place_tile(
 	## Update all the surrounding cell possibilities
 	for neighbor in neighbor_coords:
 		## This will ignore null cells
-		_update_cell_possibilities(terrain_tiles, grid, neighbor)
+		_update_cell_possibilities(grid, neighbor)
 
 ## Place a random tile in a cell.
 ##
 ## This updates the possibilities of this cell and all surrounding cells,
 ## if relevant.
 ##
-## Requires a list of valid terrain tiles, the pseudorandom number generator,
-## the grid, and the coordinates of which cell is being changed.
+## Requires the pseudorandom number generator, the grid, and the coordinates of
+## which cell is being changed.
 ##
 ## If was able to roll to place a tile, will return true, otherwise false.
 func _place_random_tile(
-	terrain_tiles : Array[Vector3i], prng : RandomNumberGenerator, grid : WFCGrid, coords : Vector2i
+	prng : RandomNumberGenerator, grid : WFCGrid, coords : Vector2i
 ) -> bool:
-	if terrain_tiles.size() < 1:
-		return false
-	
 	var cell : WFCCell = grid.get_cell(coords.x, coords.y)
 	if !cell:
 		return false
@@ -285,7 +278,7 @@ func _place_random_tile(
 	for tile in possibilities:
 		var weight := possibilities[tile]
 		if roll <= weight:
-			_place_tile(terrain_tiles, grid, coords, tile)
+			_place_tile(grid, coords, tile)
 			return true
 		
 		roll -= weight
@@ -297,12 +290,11 @@ func _place_random_tile(
 ## This updates the possibilities of this cell and all surrounding cells,
 ## if relevant.
 ##
-## Requires a list of valid terrain tiles, the grid, and the coordinates of
-## the cell where the tile is being removed.
+## Requires the grid and the coordinates of the cell where the tile is being removed.
 func _remove_tile(
-	terrain_tiles : Array[Vector3i], grid : WFCGrid, coords : Vector2i
+	grid : WFCGrid, coords : Vector2i
 ) -> void:
-	_place_tile(terrain_tiles, grid, coords, Vector3i(), true)
+	_place_tile(grid, coords, Vector3i(), true)
 
 ## Remove tiles from cells in local neighborhood.
 ##
@@ -312,7 +304,7 @@ func _remove_tile(
 ##
 ## Returns any cells that had tiles removed as [coordinates, WFCCell].
 func _remove_neighbor_tiles(
-	terrain_tiles : Array[Vector3i], grid : WFCGrid, coords : Vector2i, distance : int = 1
+	grid : WFCGrid, coords : Vector2i, distance : int = 1
 ) -> Array[Array]:
 	# Distance must be at least 1
 	distance = maxi(distance, 1)
@@ -332,7 +324,7 @@ func _remove_neighbor_tiles(
 		# Step over open or non-existent cells
 		if !cell || cell.get_status() == WFCCell.Status.OPEN:
 			continue
-		_remove_tile(terrain_tiles, grid, neighbor_coords)
+		_remove_tile(grid, neighbor_coords)
 		neighbors_removed.push_back([neighbor_coords, cell])
 	
 	return neighbors_removed
@@ -340,10 +332,10 @@ func _remove_neighbor_tiles(
 ## Initialize grid.
 ##
 ## Initialize the [WFCGrid] with possibilities.
-## Requires a list of valid terrain tiles and the grid.
-func _init_grid(terrain_tiles : Array[Vector3i], grid : WFCGrid) -> void:
-	if !terrain_tiles || terrain_tiles.is_empty():
-		_print_debug_message("No terrain tiles available.", DebugSeverity.WARNING)
+## Requires the grid being initialized.
+func _init_grid(grid : WFCGrid) -> void:
+	if !_valid_tiles || _valid_tiles.is_empty():
+		_print_debug_message("No tiles available.", DebugSeverity.WARNING)
 		return
 	
 	if !grid:
@@ -353,7 +345,7 @@ func _init_grid(terrain_tiles : Array[Vector3i], grid : WFCGrid) -> void:
 	var dimensions = grid.get_dimensions()
 	for y in range(dimensions.y):
 		for x in range(dimensions.x):
-			_update_cell_possibilities(terrain_tiles, grid, Vector2i(x, y))
+			_update_cell_possibilities(grid, Vector2i(x, y))
 
 ## Sort cells left.
 ##
@@ -426,8 +418,8 @@ func can_run() -> bool:
 		_print_debug_message("Insufficient max retries.", DebugSeverity.ERROR)
 		check_result = false
 	
-	if !_terrain_tile_set:
-		_print_debug_message("Terrain tile set must be supplied.", DebugSeverity.ERROR)
+	if !_tile_set:
+		_print_debug_message("Tile set must be supplied.", DebugSeverity.ERROR)
 		check_result = false
 	
 	# TODO: Add checks for available tiles
@@ -461,9 +453,8 @@ func run() -> WFCGrid:
 	var local_reset : int = 0 ## How many local resets have been used; a local reset clears and requeues all neighbors cells
 	var last_defer : float = Time.get_ticks_msec() ## Total time since last defer.
 	
-	var terrain_tiles := _get_valid_terrain_tiles()
 	var grid := WFCGrid.new(_dimensions.x, _dimensions.y)
-	_init_grid(terrain_tiles, grid)
+	_init_grid(grid)
 	
 	while true:
 		var has_no_solution : bool = false ## If the current solution state is unsolvable.
@@ -491,13 +482,13 @@ func run() -> WFCGrid:
 			
 			if current_cell[1].has_possibilities():
 				# If there are possible tiles for a cell, place a tile
-				_place_random_tile(terrain_tiles, prng, grid, current_cell[0])
+				_place_random_tile(prng, grid, current_cell[0])
 			else:
 				# No solution state triggered
 				if local_reset < _max_local_resets:
 					# If there are local resets remaining, reset the local neighborhood
 					# Requeue any cleared cells, and the current cell
-					var cleared_cells := _remove_neighbor_tiles(terrain_tiles, grid, current_cell[0], 2)
+					var cleared_cells := _remove_neighbor_tiles(grid, current_cell[0], 2)
 					for cleared_cell in cleared_cells:
 						cells_left.push_back(cleared_cell)
 					cells_left.push_back(current_cell)
@@ -517,7 +508,7 @@ func run() -> WFCGrid:
 				DebugSeverity.INFORMATION
 			)
 			grid = WFCGrid.new(_dimensions.x, _dimensions.y)
-			_init_grid(terrain_tiles, grid)
+			_init_grid(grid)
 			local_reset = 0
 			if _debug_mode:
 				grid_reset.emit()
