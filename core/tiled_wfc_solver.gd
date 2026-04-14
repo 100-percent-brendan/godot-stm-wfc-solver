@@ -10,7 +10,7 @@ class_name TiledWFCSolver extends Node
 ## mapped back to the [TileSet] originally supplied. It can be used directly
 ## to place tiles on a [TileMapLayer].
 ##
-## This is not designed to be thread safe.
+## This was not designed to be thread safe.
 
 ## A debugging-only signal for when a tile is placed.
 signal tile_placed(coords : Vector2i, source_id : int, atlas_coords : Vector2i)
