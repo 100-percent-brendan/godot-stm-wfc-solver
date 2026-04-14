@@ -38,7 +38,7 @@ This project is only a very basic implementation of the simple tiled model varia
 - A multi-threading framework
 
 ## Included Enhancement
-One notable enhancement within my version of the algorithm, is that it uses a local neighborhood reset, where it clears the area (5x5) around unsolvable spaces to ensure a solution occurs for most solvable tile layouts.
+One notable enhancement within my version of the algorithm is that it uses a local "neighborhood reset", where it clears the area (5x5) around unsolvable spaces to ensure a solution occurs for most solvable tile layouts.
 
 ## Basis & Supporting Work
 The primary basis of the included solver is the original [WaveFunctionCollapse](https://github.com/mxgmn/WaveFunctionCollapse) constraint solver by Maxim Gumin. His work is further built on earlier works, such as Paul C. Merrell's Model Synthesis, which is further built on Texture Synthesis by Non-parametric Sampling by Alexei A. Efros and Thomas K. Leung. Please see Maxim Gumin's important work for full context on the basis for the algorithm. We stand on the shoulders of giants.
