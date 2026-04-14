@@ -1,6 +1,22 @@
 # Godot-Based Simple Tiled Model Wave Function Collapse Solver
 This repository consists of a Godot 4.X project containing a wave function collapse solver employing the simple tiled model. It also includes a basic test scene for running the solver.
 
+In this context, the wave function collapse solver is used to generate a grid of cells, which can be used to populate a Godot tile map.
+
+## Basic Steps
+- Setup:
+  - A tile set is input, along with one or several input tile maps
+  - Based on the input tile maps, the weights for how likely one tile is to appear next to another tile are determined
+  - Setup an output grid, standing in for a tile map
+  - Determine what tiles are valid for each space; all tiles with weights are valid on an empty grid
+- Iterate
+  - Until a solution is found, or an explicit no solution state is found:
+    - Draw the grid cell with the lowest [Shannon entropy](https://en.wikipedia.org/wiki/Entropy_(information_theory)) or the one that is closest to the center on conflict
+    - Populate that grid cell a random tile from its valid possibilities
+    - Propogate the change to its neighbor cells, so that they are adjusted to only allow tiles which are valid when next to the added tile
+    - If a cell has no valid tiles and there are valid "neighborhood resets" remaining, clear a 5x5 area around the cell and reiterate
+    - Otherwise, no solution can be found: if there are retries remaining, empty the grid and restart the process, otherwise fail
+
 ## Running Project
 To run this project from the Godot editor, ensure you have [Godot 4.5 or later](https://godotengine.org/), then import the project from within the loader. You can then Run Project from the play button in the upper-right of the editor.
 
@@ -17,6 +33,8 @@ This project is only a very basic implementation of the simple tiled model varia
 - Improved tile layouts
 - Layering of multiple inter-connected tile sets
 - Integration of noise
+- Awareness of Godot terrain mappings
+- Rotation of tile patterns to smooth out probabilities
 - A multi-threading framework
 
 ## Included Enhancement
