@@ -17,6 +17,9 @@ In this context, the wave function collapse solver is used to generate a grid of
   - If a cell has no valid tiles and there are valid "neighborhood resets" remaining, clear a 5x5 area around the cell and reiterate
   - If no solution can be found and there are retries remaining, empty the grid and restart the process from grid initialization, otherwise fail
 
+## Animation
+![wfc](https://github.com/user-attachments/assets/8c6a9eb5-ae0d-498d-b049-2d7c76fb862c)
+
 ## Running Project
 To run this project from the Godot editor, ensure you have [Godot 4.5 or later](https://godotengine.org/), then import the project from within Godot. You can then Run Project from the play button in the upper-right of the editor.
 
