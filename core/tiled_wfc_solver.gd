@@ -12,13 +12,16 @@ class_name TiledWFCSolver extends Node
 ##
 ## This was not designed to be thread safe.
 
-## A debugging-only signal for when a tile is placed.
+## A signal for when a tile is placed.
 signal tile_placed(coords : Vector2i, source_id : int, atlas_coords : Vector2i)
 
-## A debugging-only signal for when a tile is removed.
+## A signal for when a tile is removed.
 signal tile_removed(coords : Vector2i)
 
-## A debugging-only signal for when the grid is reset. 
+## A signal for when tile possibilities are updated.
+signal tile_possibilities_updated(coords : Vector2i, count : int, entropy : float)
+
+## A signal for when the grid is reset. 
 signal grid_reset()
 
 ## The debug message severity.
@@ -203,6 +206,7 @@ func _update_cell_possibilities(grid : WFCGrid, coords : Vector2i) -> void:
 				possibilities.erase(tile)
 	
 	cell.set_possibilites(possibilities)
+	tile_possibilities_updated.emit(coords, possibilities.size(), cell.get_entropy())
 
 ## Place or remove a tile from a cell.
 ##
@@ -279,6 +283,7 @@ func _place_random_tile(
 		var weight := possibilities[tile]
 		if roll <= weight:
 			_place_tile(grid, coords, tile)
+			tile_possibilities_updated.emit(coords, 0, 0)
 			return true
 		
 		roll -= weight

@@ -4,12 +4,30 @@ extends Node2D
 ## This uses an incrementing seed to aid in debugging the solver, as well as
 ## demonstration.
 
-@onready var tile_map_layer : TileMapLayer = $TileMapLayer ## A Tile Map Layer to place tiles within.
+const GRID_WIDTH : int = 30 ## The grid width in tiles.
+const GRID_HEIGHT : int = 20 ## The grid height in tiles.
+const RENDER_LABEL_TEXT : bool = false ## Whether or not to render label text. Enable this to see too much information.
+
+@onready var tile_map_layer : TileMapLayer = $TileMapLayer ## A TileMapLayer to place tiles within.
+@onready var labels : Node2D = $Labels ## Labels used to render tiles remaining and entropy.
 
 var solver : TiledWFCSolver ## The solver used for debugging.
+var label_map : Dictionary[Vector2i, Label]
 
 ## Run the solver when the test scene is ready.
 func _ready() -> void:
+	# Add labels that can be used to display tiles remaining and entropy
+	for x in GRID_WIDTH:
+		for y in GRID_HEIGHT:
+			var coords := Vector2i(x, y)
+			var label := Label.new()
+			label.text = ""
+			label.position = tile_map_layer.map_to_local(coords) - Vector2(6, 0)
+			label.add_theme_font_size_override("font_size", 4)
+			labels.add_child(label)
+			label_map[coords] = label
+	
+	# Iterate over 100 instances of the WFC generation process
 	for i in range(100):
 		var input1 = load("res://test/assets/input1.tscn").instantiate()
 		var input2 = load("res://test/assets/input2.tscn").instantiate()
@@ -17,9 +35,10 @@ func _ready() -> void:
 		solver.set_seed(i)
 		solver.set_debug_mode(true)
 		solver.set_debug_delay(0.002)
-		solver.set_dimensions(30, 20)
+		solver.set_dimensions(GRID_WIDTH, GRID_HEIGHT)
 		solver.tile_placed.connect(_on_tile_placed)
 		solver.tile_removed.connect(_on_tile_removed)
+		solver.tile_possibilities_updated.connect(_on_tile_possibilities_updated)
 		solver.grid_reset.connect(_on_grid_reset)
 		
 		var _grid := await solver.run()
@@ -28,7 +47,7 @@ func _ready() -> void:
 		await get_tree().create_timer(3.0).timeout
 		
 		# Clear tiles between runs
-		tile_map_layer.clear()
+		_clear_grid()
 
 ## When a tile is placed in the solver, place it on the test [TileMapLayer].
 func _on_tile_placed(coords : Vector2i, source_id : int, atlas_coords : Vector2i) -> void:
@@ -38,6 +57,24 @@ func _on_tile_placed(coords : Vector2i, source_id : int, atlas_coords : Vector2i
 func _on_tile_removed(coords : Vector2i) -> void:
 	tile_map_layer.set_cell(coords)
 
+## When the possibilities for a tile are updated in the solver, update the
+## floating numbers above the [TileMapLayer].
+func _on_tile_possibilities_updated(coords : Vector2i, count : int, entropy : float) -> void:
+	if RENDER_LABEL_TEXT:
+		if label_map.has(coords):
+			label_map[Vector2i(coords)].text = "%d|%0.2f" % [count, entropy]
+			
+
 ## When the grid is reset in the solver, clear the [TileMapLayer].
 func _on_grid_reset() -> void:
+	_clear_grid()
+
+## Clear the grid.
+func _clear_grid() -> void:
 	tile_map_layer.clear()
+	
+	# Clear the labels
+	for x in GRID_WIDTH:
+		for y in GRID_HEIGHT:
+			if label_map.has(Vector2i(x, y)):
+				label_map[Vector2i(x, y)].text = ""

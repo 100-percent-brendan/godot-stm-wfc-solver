@@ -8,3 +8,5 @@ script = ExtResource("1_37kl0")
 
 [node name="TileMapLayer" type="TileMapLayer" parent="."]
 tile_set = ExtResource("2_8a8pi")
+
+[node name="Labels" type="Node2D" parent="."]
